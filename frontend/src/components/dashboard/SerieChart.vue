@@ -8,14 +8,17 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { SerieTemporalItem } from '../../types/dashboard'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   data: SerieTemporalItem[]
   label: string
-}>()
+  chartType?: 'bar' | 'line'
+}>(), {
+  chartType: 'bar',
+})
 
 const chartRoot = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
-const chartFontFamily = '"Segoe UI", SegoeUI, "Helvetica Neue", Helvetica, Arial, sans-serif'
+const chartFontFamily = 'Inter, "Segoe UI", SegoeUI, "Helvetica Neue", Helvetica, Arial, sans-serif'
 
 function renderChart() {
   if (!chartRoot.value) {
@@ -25,6 +28,35 @@ function renderChart() {
   if (!chart) {
     chart = echarts.init(chartRoot.value)
   }
+
+  const values = props.data.map((item) => item.quantidade)
+  const series = props.chartType === 'line'
+    ? {
+        name: props.label,
+        type: 'line' as const,
+        data: values,
+        symbol: 'circle',
+        symbolSize: 8,
+        lineStyle: {
+          width: 3,
+          color: '#1976c9',
+        },
+        itemStyle: {
+          color: '#1976c9',
+          borderColor: '#ffffff',
+          borderWidth: 2,
+        },
+      }
+    : {
+        name: props.label,
+        type: 'bar' as const,
+        data: values,
+        barWidth: '42%',
+        itemStyle: {
+          borderRadius: [6, 6, 0, 0],
+          color: '#1976c9',
+        },
+      }
 
   chart.setOption({
     animationDuration: 500,
@@ -75,19 +107,8 @@ function renderChart() {
         fontFamily: chartFontFamily,
       },
     },
-    series: [
-      {
-        name: props.label,
-        type: 'bar',
-        data: props.data.map((item) => item.quantidade),
-        barWidth: '42%',
-        itemStyle: {
-          borderRadius: [6, 6, 0, 0],
-          color: '#1976c9',
-        },
-      },
-    ],
-  })
+    series: [series],
+  }, true)
 }
 
 function resizeChart() {
@@ -100,7 +121,7 @@ onMounted(() => {
 })
 
 watch(
-  () => [props.data, props.label],
+  () => [props.data, props.label, props.chartType],
   () => {
     renderChart()
   },

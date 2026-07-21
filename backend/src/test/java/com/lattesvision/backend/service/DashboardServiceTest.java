@@ -1,12 +1,20 @@
 package com.lattesvision.backend.service;
 
+import com.lattesvision.backend.dto.CategoriaQuantidadeDTO;
 import com.lattesvision.backend.dto.ResumoPesquisadorDTO;
+import com.lattesvision.backend.dto.ResumoQualisDTO;
 import com.lattesvision.backend.dto.RankingPesquisadorDTO;
 import com.lattesvision.backend.dto.ResumoGrupoDTO;
 import com.lattesvision.backend.dto.SerieGrupoDTO;
+import com.lattesvision.backend.dto.SerieOrientacaoStatusDTO;
 import com.lattesvision.backend.model.Artigo;
+import com.lattesvision.backend.model.Banca;
+import com.lattesvision.backend.model.ClassificacaoQualis;
+import com.lattesvision.backend.model.EstratoQualis;
+import com.lattesvision.backend.model.Orientacao;
 import com.lattesvision.backend.model.Pesquisador;
 import com.lattesvision.backend.model.TrabalhoEvento;
+import com.lattesvision.backend.model.StatusClassificacaoQualis;
 import com.lattesvision.backend.repository.PesquisadorRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -107,6 +115,48 @@ class DashboardServiceTest {
     }
 
     @Test
+    void deveRetornarResumoQualisAgregadoDoGrupo() {
+        Pesquisador primeiro = criarPesquisador("7364915463901013", "Pesquisador A");
+        primeiro.getArtigos().clear();
+        primeiro.addArtigo(criarArtigoQualis(2024, EstratoQualis.A1));
+
+        Artigo semIssn = new Artigo();
+        semIssn.setAno(2024);
+        semIssn.setStatusQualis(StatusClassificacaoQualis.SEM_ISSN);
+        primeiro.addArtigo(semIssn);
+
+        Pesquisador segundo = criarPesquisador("6255476538629622", "Pesquisador B");
+        segundo.getArtigos().clear();
+        segundo.addArtigo(criarArtigoQualis(2023, EstratoQualis.B2));
+
+        when(pesquisadorRepository.findById("7364915463901013")).thenReturn(Optional.of(primeiro));
+        when(pesquisadorRepository.findById("6255476538629622")).thenReturn(Optional.of(segundo));
+
+        ResumoQualisDTO resumo = dashboardService.buscarResumoQualisGrupoAdhoc(List.of(
+                "7364915463901013",
+                "6255476538629622",
+                "7364915463901013"
+        ));
+
+        assertThat(resumo.getCobertura().getTotalArtigos()).isEqualTo(3);
+        assertThat(resumo.getCobertura().getClassificados()).isEqualTo(2);
+        assertThat(resumo.getCobertura().getSemIssn()).isEqualTo(1);
+        assertThat(resumo.getCobertura().getPercentualClassificados()).isEqualTo(66.67);
+        assertThat(resumo.getDistribuicao())
+                .filteredOn(item -> item.getQuantidade() > 0)
+                .extracting(item -> item.getEstrato(), item -> item.getQuantidade())
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(EstratoQualis.A1, 1L),
+                        org.assertj.core.groups.Tuple.tuple(EstratoQualis.B2, 1L)
+                );
+        assertThat(resumo.getSerieAnual())
+                .extracting(item -> item.getAno())
+                .containsExactly(2023, 2024);
+        verify(scraperService, never()).sincronizarPesquisador("7364915463901013");
+        verify(scraperService, never()).sincronizarPesquisador("6255476538629622");
+    }
+
+    @Test
     void deveRetornarRankingDoGrupoOrdenadoPorMetrica() {
         Pesquisador pesquisadorComMaisArtigos = criarPesquisador("7364915463901013", "Pesquisador A");
         Pesquisador pesquisadorComMenosArtigos = criarPesquisador("6255476538629622", "Pesquisador B");
@@ -136,6 +186,91 @@ class DashboardServiceTest {
                 .containsOnly("artigos");
     }
 
+    @Test
+    void deveRetornarParticipacoesEmBancasAgrupadasPorTipo() {
+        Pesquisador pesquisador = criarPesquisador("7364915463901013", "Pesquisador Local");
+        pesquisador.addBanca(criarBanca("Mestrado"));
+        pesquisador.addBanca(criarBanca("Doutorado"));
+        pesquisador.addBanca(criarBanca("Mestrado"));
+        pesquisador.addBanca(criarBanca("TCC"));
+        pesquisador.addBanca(criarBanca(null));
+        when(pesquisadorRepository.findById("7364915463901013")).thenReturn(Optional.of(pesquisador));
+
+        List<CategoriaQuantidadeDTO> bancasPorTipo = dashboardService.buscarBancasPorTipo("7364915463901013");
+
+        assertThat(bancasPorTipo)
+                .extracting(CategoriaQuantidadeDTO::getCategoria)
+                .containsExactly("Mestrado", "Doutorado", "Graduacao", "Outra");
+        assertThat(bancasPorTipo)
+                .extracting(CategoriaQuantidadeDTO::getQuantidade)
+                .containsExactly(2L, 1L, 1L, 1L);
+    }
+
+    @Test
+    void deveRetornarOrientacoesAgrupadasPorAnoEStatus() {
+        Pesquisador pesquisador = criarPesquisador("7364915463901013", "Pesquisador Local");
+        pesquisador.addOrientacao(criarOrientacao(2023, "CONCLUIDA"));
+        pesquisador.addOrientacao(criarOrientacao(2024, "CONCLUIDA"));
+        pesquisador.addOrientacao(criarOrientacao(2024, "EM_ANDAMENTO"));
+        when(pesquisadorRepository.findById("7364915463901013")).thenReturn(Optional.of(pesquisador));
+
+        List<SerieOrientacaoStatusDTO> series = dashboardService.buscarOrientacoesPorStatusAno("7364915463901013");
+
+        assertThat(series).hasSize(2);
+        assertThat(series)
+                .extracting(SerieOrientacaoStatusDTO::getAno)
+                .containsExactly(2023, 2024);
+        assertThat(series)
+                .extracting(SerieOrientacaoStatusDTO::getConcluidas)
+                .containsExactly(1L, 1L);
+        assertThat(series)
+                .extracting(SerieOrientacaoStatusDTO::getEmAndamento)
+                .containsExactly(0L, 1L);
+    }
+
+    @Test
+    void deveRetornarCoberturaDistribuicaoESerieAnualQualis() {
+        Pesquisador pesquisador = new Pesquisador();
+        pesquisador.setIdLattes("7364915463901013");
+        pesquisador.setNomeCompleto("Pesquisador Local");
+        pesquisador.addArtigo(criarArtigoQualis(2023, EstratoQualis.A2));
+        pesquisador.addArtigo(criarArtigoQualis(2024, EstratoQualis.A2));
+        pesquisador.addArtigo(criarArtigoQualis(2024, EstratoQualis.B1));
+
+        Artigo semIssn = new Artigo();
+        semIssn.setAno(2024);
+        semIssn.setStatusQualis(StatusClassificacaoQualis.SEM_ISSN);
+        pesquisador.addArtigo(semIssn);
+
+        Artigo naoClassificado = new Artigo();
+        naoClassificado.setAno(2022);
+        naoClassificado.setStatusQualis(StatusClassificacaoQualis.NAO_CLASSIFICADO);
+        pesquisador.addArtigo(naoClassificado);
+
+        when(pesquisadorRepository.findById("7364915463901013")).thenReturn(Optional.of(pesquisador));
+
+        ResumoQualisDTO resumo = dashboardService.buscarResumoQualis("7364915463901013");
+
+        assertThat(resumo.getBaseReferencia()).isEqualTo("2021-2024");
+        assertThat(resumo.getFonte()).isEqualTo("CAPES/SUCUPIRA");
+        assertThat(resumo.getCobertura().getTotalArtigos()).isEqualTo(5);
+        assertThat(resumo.getCobertura().getClassificados()).isEqualTo(3);
+        assertThat(resumo.getCobertura().getSemIssn()).isEqualTo(1);
+        assertThat(resumo.getCobertura().getNaoClassificados()).isEqualTo(1);
+        assertThat(resumo.getCobertura().getPercentualClassificados()).isEqualTo(60.0);
+        assertThat(resumo.getDistribuicao()).hasSize(EstratoQualis.values().length);
+        assertThat(resumo.getDistribuicao())
+                .filteredOn(item -> item.getEstrato() == EstratoQualis.A2)
+                .singleElement()
+                .extracting(item -> item.getQuantidade())
+                .isEqualTo(2L);
+        assertThat(resumo.getSerieAnual())
+                .extracting(item -> item.getAno())
+                .containsExactly(2023, 2024);
+        assertThat(resumo.getSerieAnual().get(1).getEstratos().get(EstratoQualis.A2)).isEqualTo(1L);
+        assertThat(resumo.getSerieAnual().get(1).getEstratos().get(EstratoQualis.B1)).isEqualTo(1L);
+    }
+
     private Pesquisador criarPesquisador(String idLattes, String nomeCompleto) {
         Pesquisador pesquisador = new Pesquisador();
         pesquisador.setIdLattes(idLattes);
@@ -147,5 +282,33 @@ class DashboardServiceTest {
         pesquisador.addArtigo(artigo);
 
         return pesquisador;
+    }
+
+    private Banca criarBanca(String tipo) {
+        Banca banca = new Banca();
+        banca.setAno(2024);
+        banca.setTipo(tipo);
+        banca.setTituloTrabalho("Banca de teste");
+        return banca;
+    }
+
+    private Orientacao criarOrientacao(Integer ano, String status) {
+        Orientacao orientacao = new Orientacao();
+        orientacao.setAno(ano);
+        orientacao.setStatus(status);
+        orientacao.setTipo("Mestrado");
+        orientacao.setTituloTrabalho("Orientacao de teste");
+        return orientacao;
+    }
+
+    private Artigo criarArtigoQualis(Integer ano, EstratoQualis estrato) {
+        ClassificacaoQualis classificacao = new ClassificacaoQualis();
+        classificacao.setEstrato(estrato);
+
+        Artigo artigo = new Artigo();
+        artigo.setAno(ano);
+        artigo.setStatusQualis(StatusClassificacaoQualis.CLASSIFICADO);
+        artigo.setClassificacaoQualis(classificacao);
+        return artigo;
     }
 }

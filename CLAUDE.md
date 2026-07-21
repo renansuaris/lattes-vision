@@ -752,3 +752,390 @@ Campos minimos sugeridos para MVP:
   - endpoint de itens paginados para individual e grupo;
   - filtros por tipo, ano, categoria e pesquisador;
   - tabela no frontend para listar titulo/descricao, pesquisador, ano e status/categoria quando aplicavel.
+
+## Memoria Tecnica (Atualizado em 2026-07-04)
+
+### Dashboard individual: graficos empilhados
+- A tela individual `PesquisadorView.vue` deixou de usar seletor unico de serie temporal.
+- Os graficos agora aparecem um abaixo do outro, na seguinte ordem:
+  - Artigos publicados em periodicos;
+  - Trabalhos em eventos;
+  - Orientacoes;
+  - Projetos;
+  - Participacoes em bancas;
+  - Producoes tecnicas.
+- O frontend carrega as series em paralelo a partir dos endpoints existentes, exceto para bancas e orientacoes, que passaram a ter agregacoes especificas.
+- A store `dashboard.ts` passou a manter:
+  - `seriesByTipo`;
+  - `bancasPorTipo`;
+  - `orientacoesPorStatusAno`.
+
+### Fonte do sistema
+- A fonte global do frontend foi alterada para priorizar `Inter`:
+  - `Inter, "Segoe UI", SegoeUI, "Helvetica Neue", Helvetica, Arial, sans-serif`
+- O CSS importa Inter via Google Fonts em `frontend/src/style.css`.
+- Os componentes ECharts tambem foram ajustados para usar a mesma stack, pois canvas nao herda a fonte global de forma confiavel.
+- Componentes ajustados:
+  - `SerieChart.vue`;
+  - `GrupoStackedLineChart.vue`;
+  - `GrupoRankingChart.vue`;
+  - `CategoryPieChart.vue`;
+  - `OrientacaoStatusChart.vue`.
+
+### Participacoes em bancas por tipo
+- O grafico de bancas deixou de ser serie temporal por ano e passou a ser donut por tipo de banca.
+- Novo DTO backend:
+  - `CategoriaQuantidadeDTO`
+- Novo endpoint:
+  - `GET /api/dashboard/pesquisadores/{id}/bancas/tipos`
+- Regra de agregacao:
+  - agrupar por `Banca.tipo`;
+  - tipo vazio vira `Outra`;
+  - `TCC` e exibido no frontend como `Graduacao`/`Graduação`.
+- Novo componente frontend:
+  - `frontend/src/components/dashboard/CategoryPieChart.vue`
+- Ajustes visuais do donut:
+  - legenda posicionada proxima ao grafico como grupo visual;
+  - labels externos removidos para nao invadir a area da legenda;
+  - leitura de categoria/quantidade fica por legenda e tooltip;
+  - paleta categórica variada, evitando tudo azul.
+
+### Orientacoes por status
+- O grafico de orientacoes deixou de mostrar apenas total anual.
+- Agora cada ano possui duas barras lado a lado:
+  - `Concluidas`;
+  - `Em andamento`.
+- Cores definidas:
+  - Concluidas: `#639922`;
+  - Em andamento: `#C0DD97`.
+- Novo DTO backend:
+  - `SerieOrientacaoStatusDTO`
+- Novo endpoint:
+  - `GET /api/dashboard/pesquisadores/{id}/orientacoes/status-series`
+- Regra de agregacao:
+  - agrupar por ano;
+  - contar separadamente status `CONCLUIDA` e `EM_ANDAMENTO`.
+- Novo componente frontend:
+  - `frontend/src/components/dashboard/OrientacaoStatusChart.vue`
+- O grafico usa barras agrupadas, tooltip por eixo e legenda inferior.
+
+### Testes e validacoes executadas
+- Backend:
+  - `mvn test -q` executado com sucesso em `backend/`.
+  - Testes adicionados em `DashboardServiceTest` para:
+    - bancas agrupadas por tipo;
+    - orientacoes agrupadas por ano e status.
+- Frontend:
+  - `npm run build` executado com sucesso em `frontend/`.
+- Avisos conhecidos:
+  - Vite segue alertando bundle grande por causa do ECharts;
+  - Maven/Mockito segue emitindo avisos de ByteBuddy/dynamic agent, mas a suite passa.
+
+### Observacoes de produto
+- Para dashboard individual, a prioridade visual atual e leitura rapida de perfil academico.
+- Artigos publicados em periodicos permanecem como primeiro grafico por relevancia para avaliacao academica/PPG.
+- Donut funciona melhor para distribuicao categorica, nao para evolucao temporal.
+- Orientacoes precisam preservar status, pois total agregado esconde diferenca entre producao concluida e atividade em andamento.
+- Proximo passo ainda recomendado:
+  - implementar drill-down paginado para auditar os itens por grafico, ano, tipo, status e categoria.
+
+## Investigacao e Direcao Arquitetural para Qualis (2026-07-16)
+
+### Objetivo funcional
+- Enriquecer a analise de artigos em periodicos com uma dimensao qualitativa, alem das contagens atuais.
+- Permitir indicadores individuais e de grupo por estrato Qualis, preservando rastreabilidade da fonte e do ciclo avaliativo.
+
+### Investigacao do scriptLattes
+- O `scriptLattes-main/` declara suporte a associacoes Qualis para revistas e congressos.
+- A documentacao historica orienta fornecer listas Qualis em CSV, separadas por tabulacao.
+- A versao presente no repositorio extrai ISSN e ainda possui campos/saidas relacionados a Qualis, mas nao foi localizada uma rotina operacional completa que carregue a tabela e atribua os estratos aos artigos.
+- A abordagem historica tambem contempla correspondencia por nome exato ou similar, o que pode produzir falsos positivos quando comparado ao uso de um identificador estruturado.
+
+### Investigacao do QLattes
+- Repositorio de referencia: `https://github.com/nabormendonca/qlattes` (licenca MIT).
+- O QLattes extrai o ISSN diretamente do atributo `cvuri` presente no HTML de cada artigo do Lattes.
+- A classificacao e feita localmente, sem consultar servicos externos durante a abertura do curriculo.
+- Estrategia de correspondencia:
+  - busca por ISSN principal;
+  - tentativa por ISSN alternativo (ex.: versao impressa/eletronica);
+  - resultado `Nao classificado` quando nenhuma fonte possui o ISSN.
+- O QLattes evita classificar congressos/eventos automaticamente porque eles nao possuem identificador universal equivalente ao ISSN.
+- A versao atual analisada ainda distribui principalmente a base Qualis CAPES 2017-2020, portanto nao deve ser usada como fonte oficial vigente para o ciclo 2021-2024.
+
+### Situacao atual do LattesVision
+- A entidade `Artigo` armazena somente `id`, `citacaoCompleta`, `ano` e `pesquisador`.
+- O `ArtigoParser` usa o texto visivel do elemento `div.artigo-completo` e atualmente descarta os dados estruturados existentes no `cvuri`.
+- Antes de classificar artigos, o parser deve passar a extrair pelo menos:
+  - `titulo`;
+  - `periodico`;
+  - `issn`;
+  - `doi`;
+  - `ano`;
+  - `citacaoCompleta`.
+
+### Decisao sobre fonte de dados
+- Nao incorporar o QLattes como dependencia de execucao do LattesVision.
+- Nao copiar a base 2017-2020 do QLattes como fonte principal da feature.
+- Usar o QLattes apenas como referencia de arquitetura, extracao do `cvuri` e tratamento de ISSN alternativo.
+- Obter a planilha oficial completa do Qualis Periodicos 2021-2024 disponibilizada pela CAPES/Sucupira.
+- Evitar baixar apenas categorias/areas selecionadas: a base completa melhora cobertura e o Qualis dos ciclos recentes adota classificacao unica por periodico, com registro da area-mae.
+- Manter os dados Qualis localmente no PostgreSQL. O dashboard nao deve depender de chamadas em tempo real a CAPES, Scopus ou outros servicos.
+
+### Modelagem recomendada
+- Evoluir `Artigo` com os campos estruturados `titulo`, `periodico`, `issn` e `doi`.
+- Criar entidade/tabela `ClassificacaoQualis` com, no minimo:
+  - `id`;
+  - `issnNormalizado`;
+  - `issnFormatado`;
+  - `tituloPeriodico`;
+  - `estrato`;
+  - `cicloInicio`;
+  - `cicloFim`;
+  - `areaMae`;
+  - `fonte`;
+  - `dataImportacao`.
+- Aplicar unicidade por `issnNormalizado + cicloInicio + cicloFim`.
+- Normalizar ISSN removendo hifen, espacos e diferencas de caixa antes da comparacao.
+- Manter associacao opcional de `Artigo` para `ClassificacaoQualis`, evitando copiar o estrato como texto em todos os artigos.
+- Prever estados distintos para:
+  - artigo classificado;
+  - artigo sem ISSN;
+  - ISSN nao encontrado na base;
+  - artigo fora do ciclo disponivel.
+
+### Fluxo recomendado
+1. Importar a planilha oficial para `classificacoes_qualis` por um processo offline/controlado.
+2. Extrair e persistir o ISSN durante o scraping do artigo.
+3. Um `QualisService` resolve a classificacao exata pelo ISSN e ciclo correspondente ao ano do artigo.
+4. Persistir a associacao encontrada para consultas eficientes e rastreaveis.
+5. Disponibilizar rotina de reclassificacao em lote para artigos existentes ou apos nova importacao/correcao da base.
+6. Nunca apresentar classificacao inferida por nome ou percentil externo como se fosse Qualis oficial. Eventual estimativa futura deve possuir rotulo e fonte diferentes.
+
+### Estrategia de desempenho
+- Uma base com aproximadamente 31 mil periodicos e pequena para PostgreSQL; o gargalo esperado continua sendo o scraping do Lattes, nao a consulta Qualis.
+- Criar indice unico composto em `issnNormalizado + cicloInicio + cicloFim` para evitar varredura completa da tabela.
+- Normalizar o ISSN uma unica vez na importacao da base e uma vez na extracao do artigo.
+- Evitar o problema de N consultas para N artigos:
+  - coletar os ISSNs distintos dos artigos sincronizados;
+  - consultar todas as classificacoes necessarias em uma unica operacao `WHERE issn_normalizado IN (...)`;
+  - montar um mapa em memoria por ISSN;
+  - associar e persistir os artigos em lote.
+- Importar a planilha em lotes controlados (ex.: 500 ou 1.000 registros), com relatorio de inseridos, atualizados, duplicados e invalidos.
+- Nao carregar toda a base em cache nem adicionar Caffeine inicialmente. Consultas indexadas devem ser suficientes; cache so deve ser introduzido apos medicao demonstrar necessidade.
+- Evitar busca textual por nome do periodico no caminho automatico, pois e mais custosa e menos confiavel que correspondencia exata por ISSN.
+- Para consultas de dashboard, preferir agregacoes executadas no banco e DTOs, sem carregar entidades completas ou toda a tabela Qualis em memoria.
+
+### Estrategia de importacao
+- A migration deve criar apenas a estrutura, restricoes e indices; nao incluir dezenas de milhares de `INSERTs` em uma migration SQL gigante.
+- Preservar o arquivo oficial original como evidencia da fonte e do ciclo importado.
+- Implementar importador proprio para XLSX/CSV, possivelmente com Apache POI para XLSX.
+- O importador deve validar formato e digito verificador do ISSN, normalizar valores e tratar duplicidades antes de persistir.
+- A importacao/atualizacao da base Qualis nao deve ocorrer automaticamente a cada inicializacao da aplicacao.
+
+### Escopo inicial recomendado
+- Iniciar exclusivamente com artigos publicados entre 2021 e 2024 e com a classificacao oficial Qualis 2021-2024.
+- Artigos de outros periodos permanecem fora da cobertura ate que as bases historicas correspondentes sejam importadas.
+- Nao aplicar retroativamente o Qualis 2021-2024 a artigos antigos.
+- Nao classificar trabalhos em eventos no MVP desta feature.
+
+### Indicadores candidatos
+- Quantidade de artigos por estrato (`A1` a `B4`, `C` e nao classificados).
+- Percentual de artigos classificados e cobertura de ISSN.
+- Total de artigos nos estratos A e, separadamente, `A1 + A2`.
+- Distribuicao Qualis por ano em barras empilhadas.
+- Comparacao da distribuicao Qualis entre pesquisadores de um grupo.
+- Exportacao com artigo, ISSN, periodico, ciclo, estrato, area-mae e fonte.
+- Evitar uma pontuacao Qualis unica no primeiro momento, pois pesos podem variar entre areas, programas e editais.
+
+### Direcao visual inicial
+- Manter o grafico de linha de artigos como visao quantitativa da evolucao anual.
+- Adicionar uma visualizacao separada, preferencialmente barras empilhadas por ano e estrato, para a composicao qualitativa.
+- Exibir cobertura e nao classificados para que a leitura do grafico nao sugira uma completude inexistente.
+
+## Inicio da Implementacao Qualis (2026-07-21)
+
+### Decisao metodologica consolidada
+- O LattesVision usara a base oficial Qualis Periodicos 2021-2024 como referencia unica para artigos de qualquer ano, seguindo a experiencia de uso do QLattes.
+- A interface e a documentacao devem deixar explicito que o estrato pertence ao periodico na base de referencia 2021-2024; ele nao representa uma classificacao historica do artigo no ano em que foi publicado.
+- Artigos anteriores a 2021 e posteriores a 2024 tambem poderao receber o estrato encontrado nessa base.
+- O estado `NAO_CLASSIFICADO` deve permanecer diferente do estrato oficial `C`.
+
+### Base oficial preservada
+- Arquivo: `backend/data/qualis/raw/qualis_periodicos_2021_2024_oficial.xlsx`.
+- Documentacao e analise: `backend/data/qualis/README.md`.
+- A base possui 171.154 linhas, 33.347 ISSNs distintos e nenhum conflito de estrato para o mesmo ISSN.
+- Estratos presentes: `A1`, `A2`, `A3`, `A4`, `B1`, `B2`, `B3`, `B4` e `C`.
+- Nao existem registros `B5` no arquivo.
+
+### Primeiro incremento implementado
+- `Artigo` passou a armazenar os campos estruturados `titulo`, `periodico` e `issn`, alem de `citacaoCompleta` e `ano`.
+- `ArtigoParser` passou a:
+  - localizar elementos com atributo `cvuri` dentro de `div.artigo-completo`;
+  - extrair `titulo`, `nomePeriodico` e `issn`;
+  - decodificar valores percent-encoded;
+  - formatar ISSN como `NNNN-NNNX`;
+  - priorizar o ano estruturado em `span.informacao-artigo[data-tipo-ordenacao=ano]`;
+  - preservar o comportamento anterior como fallback quando `cvuri` nao existe.
+- Foram adicionados testes para extracao estruturada, fallback e normalizacao de ISSN.
+- Validacao executada: `mvn test -q` passou em `backend/`.
+
+### Incremento de dashboard planejado
+1. Criar endpoint agregado para distribuicao Qualis individual.
+2. Exibir cobertura (`CLASSIFICADO`, `SEM_ISSN`, `NAO_CLASSIFICADO`) sem misturar `NAO_CLASSIFICADO` com o estrato `C`.
+3. Adicionar grafico de barras empilhadas por ano e estrato.
+
+### Persistencia e importacao Qualis implementadas
+- Criados:
+  - `EstratoQualis`;
+  - `StatusClassificacaoQualis`;
+  - `ClassificacaoQualis`;
+  - `ClassificacaoQualisRepository`;
+  - `ArtigoRepository`;
+  - `IssnUtils`;
+  - `QualisImportService`;
+  - `QualisService`;
+  - `QualisImportRunner`.
+- `Artigo` agora possui associacao opcional com `ClassificacaoQualis` e status explicito de cobertura.
+- A tabela de classificacoes usa unicidade por `issn_normalizado + ciclo_inicio + ciclo_fim` e indice por ISSN normalizado.
+- O importador usa leitura streaming do XLSX com Apache POI 5.5.1.
+- A importacao normaliza e deduplica as 171.154 linhas para 33.347 classificacoes.
+- Os 34 ISSNs com digito verificador invalido sao preservados e contabilizados como aviso.
+- A importacao e idempotente: insere novos, atualiza alterados e ignora inalterados.
+- Em um banco novo, o processo e executado automaticamente uma unica vez e reclassifica artigos existentes ao terminar.
+- Nos startups seguintes, a importacao e ignorada quando os 33.347 periodicos esperados ja estao persistidos.
+- O caminho do XLSX e resolvido tanto a partir de `backend/` quanto da raiz do repositorio, facilitando a execucao pelo IntelliJ.
+- Novos artigos sao classificados automaticamente durante a sincronizacao do Lattes.
+- Testes adicionados para utilitario de ISSN, importador, arquivo oficial completo e resolucao de classificacao.
+- Validacao executada: `mvn test -q` passou em `backend/`.
+
+## Dashboard Qualis Individual (2026-07-21)
+
+### Referencia de produto adicional
+- A Plataforma Stela Experta foi analisada como referencia complementar ao scriptLattes e ao QLattes.
+- Materiais oficiais destacam relatorios quali-quantitativos de artigos, paineis dinamicos, comparacoes e indicadores bibliometricos.
+- A ideia aproveitada no LattesVision foi combinar distribuicao qualitativa, evolucao temporal e transparencia de cobertura; a interface proprietaria nao foi copiada.
+- Referencias consultadas:
+  - `https://stela.org.br/experta/`;
+  - `https://www.stelatek.com.br/wp-content/uploads/2021/06/E-book-Funcionalidades-da-Plataforma-Stela-Experta-1.pdf`;
+  - `https://www.stelatek.com.br/blog/comparacao-de-indicadores-entre-ppgs-atraves-plataforma-stela-experta/`.
+
+### Correcao do parser
+- `ArtigoParser` agora remove da citacao os elementos auxiliares `.informacao-artigo[data-tipo-ordenacao]` antes de obter o texto visivel.
+- Isso corrige prefixos duplicados como `AUTOR2025AUTOR...` sem prejudicar a extracao estruturada do ano, titulo, periodico e ISSN.
+- A correcao afeta novas sincronizacoes; artigos ja persistidos precisam ser sincronizados novamente para atualizar `citacaoCompleta`.
+
+### Backend
+- Criado `GET /api/dashboard/pesquisadores/{id}/qualis`.
+- O endpoint retorna um unico `ResumoQualisDTO` com:
+  - `baseReferencia` e `fonte`;
+  - cobertura total, classificados, sem ISSN, nao classificados e percentual;
+  - distribuicao completa e ordenada de `A1` a `C`, incluindo estratos com zero;
+  - serie anual de barras empilhadas por estrato.
+- A correspondencia continua sendo exata por ISSN e `NAO_CLASSIFICADO` continua separado do estrato oficial `C`.
+
+### Frontend
+- Adicionado painel `Qualis dos periodicos` ao dashboard individual.
+- O painel mostra cobertura, pendencias de identificacao, totais por estrato e evolucao anual.
+- `QualisStackedBarChart.vue` usa ECharts com legenda interativa para ocultar ou comparar estratos.
+- O texto metodologico deixa explicito que a base CAPES 2021-2024 e uma referencia unica aplicada aos artigos de qualquer ano.
+- Layout responsivo para desktop, tablet e celular.
+
+### Validacao
+- `mvn test -q` passou em `backend/`.
+- `npm run build` passou em `frontend/`.
+- Avisos conhecidos permanecem: carregamento dinamico do agente Mockito no Java e bundle grande do ECharts no Vite.
+
+### Proximos passos recomendados
+1. Adicionar drill-down dos artigos ao clicar em ano/estrato, exibindo titulo, periodico, ISSN e motivo quando nao classificado.
+2. Adicionar comparacao Qualis por pesquisador dentro do dashboard de grupo.
+3. Integrar os filtros de periodo aos indicadores quantitativos e Qualis.
+
+## Qualis no Dashboard de Grupo e Referencias Stela (2026-07-21)
+
+### Material Stela Experta preservado
+- Criada a pasta `Stela-Experta/` na raiz do repositorio.
+- Preservado o ebook publico de funcionalidades em `Stela-Experta/E-book-Funcionalidades-da-Plataforma-Stela-Experta.pdf`.
+- O arquivo possui 55 paginas e SHA-256 `fbef11941878a10cfae1efe3dce3c60bc6cac62d9211110eb6f65d72400b2337`.
+- `Stela-Experta/README.md` registra URL original, pagina do produto, data de acesso, autoria e ideias que podem inspirar incrementos futuros.
+- O material deve ser usado apenas como referencia de produto; direitos e interface proprietaria permanecem com seus titulares.
+
+### Backend de grupo
+- Criado `POST /api/dashboard/grupo-adhoc/qualis`, recebendo o mesmo `GrupoAdhocRequestDTO` dos demais indicadores de grupo.
+- O retorno reutiliza `ResumoQualisDTO` e consolida:
+  - total de artigos;
+  - classificados, sem ISSN e nao classificados;
+  - percentual de cobertura;
+  - distribuicao por estrato;
+  - serie anual empilhada por estrato.
+- IDs repetidos sao deduplicados antes da agregacao.
+- A regra central foi extraida para `DashboardService.montarResumoQualis`, compartilhada entre os endpoints individual e de grupo.
+- Pesquisadores existentes continuam sendo lidos do banco; somente IDs ausentes acionam sincronizacao.
+
+### Frontend de grupo
+- O dashboard de grupo agora carrega a serie quantitativa e o resumo Qualis em paralelo.
+- Criado `QualisSummaryPanel.vue`, compartilhado pelas telas individual e de grupo.
+- O grupo exibe cobertura consolidada, distribuicao total e evolucao anual por estrato com legenda interativa.
+- A comparacao separada por pesquisador permanece como incremento futuro; o grafico atual representa a producao consolidada do grupo.
+
+### Validacao
+- Teste unitario garante agregacao entre pesquisadores, deduplicacao de IDs, cobertura e ordem anual.
+- `mvn test -q` passou em `backend/`.
+- `npm run build` passou em `frontend/`.
+
+## Fechamento da Sessao Qualis (2026-07-21)
+
+> Esta secao representa o estado vigente ao final da sessao. As secoes anteriores de investigacao de 2026-07-16 registram hipoteses historicas e podem conter propostas que foram posteriormente substituidas pelas decisoes consolidadas abaixo.
+
+### Estado funcional confirmado
+- O usuario executou a aplicacao localmente pelo IntelliJ com PostgreSQL no Docker.
+- A importacao automatica da base oficial foi concluida com sucesso:
+  - 171.154 linhas lidas;
+  - 33.347 periodicos distintos inseridos;
+  - zero linhas rejeitadas;
+  - 34 ISSNs com aviso de digito verificador invalido.
+- Nos startups seguintes, a aplicacao detecta os 33.347 registros e nao repete a importacao.
+- O usuario validou manualmente no frontend, ao final da sessao, que os dashboards individual e de grupo estavam funcionando corretamente.
+
+### Decisoes vigentes
+- Usar a base Qualis Periodicos CAPES/Sucupira 2021-2024 como referencia unica para artigos de qualquer ano.
+- Nao interpretar o estrato exibido como classificacao historica do artigo.
+- Resolver Qualis apenas por correspondencia exata de ISSN no fluxo automatico.
+- Nao usar correspondencia textual pelo nome do periodico como se fosse classificacao oficial.
+- Manter `CLASSIFICADO`, `SEM_ISSN` e `NAO_CLASSIFICADO` como estados distintos.
+- Manter o estrato oficial `C` diferente de `NAO_CLASSIFICADO`.
+- Nao classificar trabalhos em eventos no escopo atual.
+- Preservar fonte, ciclo e classificacao na entidade compartilhada `ClassificacaoQualis`, evitando duplicar o estrato em cada artigo.
+
+### Fluxo operacional atual
+1. Ao iniciar com banco novo ou base incompleta, `QualisImportRunner` localiza o XLSX oficial e importa as classificacoes.
+2. Ao sincronizar um pesquisador ausente, o scraper extrai titulo, periodico e ISSN do `cvuri` de cada artigo.
+3. `QualisService` consulta os ISSNs em lote, associa `ClassificacaoQualis` e define o status de cobertura.
+4. Pesquisadores ja persistidos sao reutilizados pelo frontend sem novo scraping.
+5. O dashboard individual consulta `GET /api/dashboard/pesquisadores/{id}/qualis`.
+6. O dashboard de grupo consulta `POST /api/dashboard/grupo-adhoc/qualis` e consolida IDs distintos.
+
+### Componentes principais para retomada
+- Base e metodologia: `backend/data/qualis/README.md`.
+- Importacao: `QualisImportRunner`, `QualisImportService` e `QualisService`.
+- Extracao de artigos: `ArtigoParser`.
+- Agregacao de dashboard: `DashboardService.montarResumoQualis`.
+- Contrato da API: `ResumoQualisDTO`, `CoberturaQualisDTO`, `EstratoQuantidadeDTO` e `SerieQualisAnoDTO`.
+- Visualizacao compartilhada: `frontend/src/components/dashboard/QualisSummaryPanel.vue`.
+- Grafico: `frontend/src/components/dashboard/QualisStackedBarChart.vue`.
+- Estado e requisicoes: `frontend/src/stores/dashboard.ts` e `frontend/src/services/dashboard.service.ts`.
+- Referencia de produto: `Stela-Experta/README.md` e o ebook preservado na mesma pasta.
+
+### Observacoes importantes
+- A correcao de citacoes duplicadas (`AUTOR2025AUTOR...`) vale para novas sincronizacoes. Registros ja persistidos antes da correcao precisam ser sincronizados novamente para atualizar `citacaoCompleta`.
+- Isso nao interfere na classificacao ou nos graficos Qualis dos artigos que ja possuem ISSN persistido.
+- A agregacao Qualis atual e feita em memoria a partir dos artigos dos pesquisadores carregados. Para o volume atual isso e suficiente; migrar para consultas agregadas no banco apenas se medicoes futuras indicarem necessidade.
+- O PDF do Stela Experta tem 6,6 MB e foi mantido intencionalmente como referencia local.
+- Avisos conhecidos sem falha de build:
+  - Mockito/ByteBuddy alerta sobre carregamento dinamico de agente em versoes futuras do Java;
+  - Vite alerta que o bundle com ECharts ultrapassa 500 kB.
+
+### Ponto recomendado para a proxima sessao
+1. Implementar drill-down ao clicar em um ano/estrato, permitindo auditar os artigos que compoem o grafico.
+2. Depois, adicionar comparacao Qualis separada por pesquisador no grupo, alem da consolidacao ja existente.
+3. Em seguida, tornar os filtros de periodo funcionais e aplica-los de forma consistente aos cards e graficos.
+4. Avaliar exportacao dos resultados com titulo, periodico, ISSN, estrato, ciclo, fonte e status de cobertura.

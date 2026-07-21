@@ -15,7 +15,7 @@ const props = defineProps<{
 
 const chartRoot = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
-const chartFontFamily = '"Segoe UI", SegoeUI, "Helvetica Neue", Helvetica, Arial, sans-serif'
+const chartFontFamily = 'Inter, "Segoe UI", SegoeUI, "Helvetica Neue", Helvetica, Arial, sans-serif'
 
 function shortName(item: RankingPesquisadorItem) {
   return item.nomeCompleto || `ID ${item.idLattes}`

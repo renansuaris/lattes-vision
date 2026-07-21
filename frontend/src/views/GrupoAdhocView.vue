@@ -89,6 +89,12 @@
         </div>
       </section>
 
+      <QualisSummaryPanel
+        v-if="store.resumoQualisGrupo"
+        :resumo="store.resumoQualisGrupo"
+        contexto="grupo"
+      />
+
       <section class="panel chart-panel">
         <div class="panel-body">
           <div class="section-header">
@@ -172,6 +178,7 @@ import { RouterLink, useRoute } from 'vue-router'
 
 import GrupoRankingChart from '../components/dashboard/GrupoRankingChart.vue'
 import GrupoStackedLineChart from '../components/dashboard/GrupoStackedLineChart.vue'
+import QualisSummaryPanel from '../components/dashboard/QualisSummaryPanel.vue'
 import { useDashboardStore } from '../stores/dashboard'
 import type { TipoRankingGrupo } from '../types/dashboard'
 
@@ -232,7 +239,7 @@ watch(
     }
 
     if (store.resumoGrupo && store.grupoIds.join(',') === routeIds.value.join(',')) {
-      if (store.serieGrupo.length === 0) {
+      if (store.serieGrupo.length === 0 || !store.resumoQualisGrupo) {
         await store.loadSerieGrupoAdhoc(routeIds.value)
       }
       if (store.rankingGrupo.length === 0 || store.rankingMetrica !== selectedRankingMetric.value) {

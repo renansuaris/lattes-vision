@@ -47,6 +47,9 @@ public class ScraperService {
     @Autowired
     private PesquisadorRepository repository;
 
+    @Autowired
+    private QualisService qualisService;
+
     @PostConstruct
     public void init() {
         playwright = Playwright.create();
@@ -156,6 +159,7 @@ public class ScraperService {
         pesquisador.setResumoProfissional(doc.select("p.resumo").text());
 
         List<Artigo> artigos = ArtigoParser.parse(doc);
+        qualisService.classificarArtigos(artigos);
         List<Orientacao> orientacoes = OrientacaoParser.parse(doc);
         List<Projeto> projetos = ProjetoParser.parse(doc);
         List<Banca> bancas = BancaParser.parse(doc);

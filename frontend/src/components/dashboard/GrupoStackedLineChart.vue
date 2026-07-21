@@ -14,7 +14,7 @@ const props = defineProps<{
 
 const chartRoot = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
-const chartFontFamily = '"Segoe UI", SegoeUI, "Helvetica Neue", Helvetica, Arial, sans-serif'
+const chartFontFamily = 'Inter, "Segoe UI", SegoeUI, "Helvetica Neue", Helvetica, Arial, sans-serif'
 
 const seriesConfig = [
   { key: 'artigos', name: 'Artigos em periódicos', color: '#1976c9' },

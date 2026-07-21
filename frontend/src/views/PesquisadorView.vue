@@ -62,46 +62,70 @@
         </div>
       </section>
 
+      <QualisSummaryPanel
+        v-if="store.resumoQualis"
+        :resumo="store.resumoQualis"
+      />
+
       <section class="panel chart-panel">
         <div class="panel-body">
           <div class="section-header">
             <div>
               <h2 class="section-title">Séries temporais</h2>
               <p class="section-subtitle">
-                Dados agrupados por ano para {{ currentOptionLabel.toLowerCase() }}.
+                Indicadores anuais do currículo, exibidos por categoria de produção.
               </p>
-            </div>
-
-            <div class="segmented-control" aria-label="Tipo de serie temporal">
-              <button
-                v-for="option in seriesOptions"
-                :key="option.value"
-                class="segment-button"
-                :class="{ 'is-active': option.value === selectedTipo }"
-                @click="selectedTipo = option.value"
-              >
-                {{ option.label }}
-              </button>
             </div>
           </div>
 
-          <section v-if="store.errorSerie && store.serie.length === 0" class="status-box error">
+          <section v-if="store.errorSerie && !hasChartData" class="status-box error">
             {{ store.errorSerie }}
           </section>
 
-          <section v-else-if="store.loadingSerie && store.serie.length === 0" class="status-box">
-            Carregando serie temporal...
+          <section v-else-if="store.loadingSerie && !hasChartData" class="status-box">
+            Carregando series temporais...
           </section>
 
-          <section v-else-if="store.serie.length === 0" class="status-box">
-            Sem dados para o tipo selecionado.
+          <section v-else-if="!hasChartData" class="status-box">
+            Sem dados para exibir.
           </section>
 
-          <SerieChart
-            v-else
-            :data="store.serie"
-            :label="currentOptionLabel"
-          />
+          <div v-else class="chart-stack">
+            <article
+              v-for="card in seriesCards"
+              :key="card.value"
+              class="chart-card"
+            >
+              <div class="chart-card__header">
+                <div>
+                  <h3>{{ card.label }}</h3>
+                  <p>{{ card.description }}</p>
+                </div>
+              </div>
+
+              <section v-if="isEmptyCard(card.value)" class="status-box">
+                Sem dados para esta categoria.
+              </section>
+
+              <CategoryPieChart
+                v-else-if="card.value === 'bancas'"
+                :data="store.bancasPorTipo"
+                :label="card.label"
+              />
+
+              <OrientacaoStatusChart
+                v-else-if="card.value === 'orientacoes'"
+                :data="store.orientacoesPorStatusAno"
+              />
+
+              <SerieChart
+                v-else
+                :data="getSerieData(card.value)"
+                :label="card.label"
+                :chart-type="card.value === 'artigos' ? 'line' : 'bar'"
+              />
+            </article>
+          </div>
         </div>
       </section>
 
@@ -122,23 +146,53 @@
 
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
+import CategoryPieChart from '../components/dashboard/CategoryPieChart.vue'
+import OrientacaoStatusChart from '../components/dashboard/OrientacaoStatusChart.vue'
+import QualisSummaryPanel from '../components/dashboard/QualisSummaryPanel.vue'
 import SerieChart from '../components/dashboard/SerieChart.vue'
 import { useDashboardStore } from '../stores/dashboard'
 import type { TipoSerie } from '../types/dashboard'
 
 const route = useRoute()
-const router = useRouter()
 const store = useDashboardStore()
 
-const seriesOptions: Array<{ value: TipoSerie; label: string }> = [
-  { value: 'artigos', label: 'Artigos' },
-  { value: 'orientacoes', label: 'Orientações' },
-  { value: 'projetos', label: 'Projetos' },
-  { value: 'bancas', label: 'Bancas' },
-  { value: 'producoes_tecnicas', label: 'Produções técnicas' },
-  { value: 'trabalhos_eventos', label: 'Trabalhos em eventos' },
+const seriesOptions: Array<{
+  value: TipoSerie
+  label: string
+  description: string
+}> = [
+  {
+    value: 'artigos',
+    label: 'Artigos publicados em periódicos',
+    description: 'Produção bibliográfica em periódicos agrupada por ano.',
+  },
+  {
+    value: 'trabalhos_eventos',
+    label: 'Trabalhos em eventos',
+    description: 'Publicações em anais de eventos agrupadas por ano.',
+  },
+  {
+    value: 'orientacoes',
+    label: 'Orientações',
+    description: 'Orientações concluídas e em andamento identificadas no currículo.',
+  },
+  {
+    value: 'projetos',
+    label: 'Projetos',
+    description: 'Projetos vinculados ao pesquisador ao longo do tempo.',
+  },
+  {
+    value: 'bancas',
+    label: 'Participações em bancas',
+    description: 'Distribuição das participações em bancas acadêmicas por tipo.',
+  },
+  {
+    value: 'producoes_tecnicas',
+    label: 'Produções técnicas',
+    description: 'Produções técnicas consolidadas pelo parser atual.',
+  },
 ]
 
 const currentId = computed(() => String(route.params.id ?? ''))
@@ -151,24 +205,33 @@ const currentResumo = computed(() => {
   return store.resumo
 })
 
-const selectedTipo = computed<TipoSerie>({
-  get: () => {
-    const tipo = route.query.tipo
-    return seriesOptions.some((option) => option.value === tipo) ? (tipo as TipoSerie) : 'artigos'
-  },
-  set: (value) => {
-    router.replace({
-      query: {
-        ...route.query,
-        tipo: value,
-      },
-    })
-  },
+const seriesCards = computed(() => {
+  return seriesOptions.map((option) => ({
+    value: option.value,
+    label: option.label,
+    description: option.description,
+  }))
 })
 
-const currentOptionLabel = computed(() => {
-  return seriesOptions.find((option) => option.value === selectedTipo.value)?.label ?? 'Artigos'
+const hasChartData = computed(() => {
+  return seriesOptions.some((option) => !isEmptyCard(option.value))
 })
+
+function getSerieData(tipo: TipoSerie) {
+  return store.seriesByTipo[tipo] ?? []
+}
+
+function isEmptyCard(tipo: TipoSerie) {
+  if (tipo === 'bancas') {
+    return store.bancasPorTipo.length === 0
+  }
+
+  if (tipo === 'orientacoes') {
+    return store.orientacoesPorStatusAno.length === 0
+  }
+
+  return getSerieData(tipo).length === 0
+}
 
 const summaryCards = computed(() => {
   const resumo = currentResumo.value
@@ -219,7 +282,7 @@ async function loadPage() {
   }
 
   if (!store.errorResumo) {
-    await store.loadSerie(currentId.value, selectedTipo.value)
+    await store.loadSeries(currentId.value, seriesOptions.map((option) => option.value))
   }
 }
 
@@ -229,16 +292,5 @@ watch(
     await loadPage()
   },
   { immediate: true },
-)
-
-watch(
-  () => selectedTipo.value,
-  async (tipo, previousTipo) => {
-    if (tipo === previousTipo || !/^\d{16}$/.test(currentId.value) || !currentResumo.value) {
-      return
-    }
-
-    await store.loadSerie(currentId.value, tipo)
-  },
 )
 </script>

@@ -1,11 +1,14 @@
 package com.lattesvision.backend.controller;
 
 import com.lattesvision.backend.dto.ApiErrorResponse;
+import com.lattesvision.backend.dto.CategoriaQuantidadeDTO;
 import com.lattesvision.backend.dto.GrupoAdhocRequestDTO;
 import com.lattesvision.backend.dto.RankingPesquisadorDTO;
 import com.lattesvision.backend.dto.ResumoGrupoDTO;
 import com.lattesvision.backend.dto.ResumoPesquisadorDTO;
+import com.lattesvision.backend.dto.ResumoQualisDTO;
 import com.lattesvision.backend.dto.SerieGrupoDTO;
+import com.lattesvision.backend.dto.SerieOrientacaoStatusDTO;
 import com.lattesvision.backend.dto.SerieTemporalDTO;
 import com.lattesvision.backend.service.DashboardService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -148,6 +151,30 @@ public class DashboardController {
     }
 
     @Operation(
+            summary = "Resumo Qualis agregado de um grupo ad-hoc",
+            description = "Recebe uma lista de IDs Lattes e consolida cobertura, distribuicao por estrato e evolucao anual usando a base de referencia CAPES 2021-2024."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Resumo Qualis do grupo encontrado com sucesso",
+                    content = @Content(schema = @Schema(implementation = ResumoQualisDTO.class))
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Lista vazia, lista com menos de dois IDs ou ID Lattes invalido",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            )
+    })
+    @PostMapping("/grupo-adhoc/qualis")
+    public ResponseEntity<ResumoQualisDTO> buscarResumoQualisGrupoAdhoc(
+            @RequestBody GrupoAdhocRequestDTO request
+    ) {
+        validarIdsGrupo(request);
+        return ResponseEntity.ok(dashboardService.buscarResumoQualisGrupoAdhoc(request.getIdsLattes()));
+    }
+
+    @Operation(
             summary = "Ranking de pesquisadores de um grupo ad-hoc",
             description = "Recebe uma lista de IDs Lattes e retorna os pesquisadores ordenados por uma metrica agregada."
     )
@@ -203,6 +230,96 @@ public class DashboardController {
     ) {
         validarIdLattes(id);
         return ResponseEntity.ok(dashboardService.buscarSeriesTemporais(id, tipo));
+    }
+
+    @Operation(
+            summary = "Participacoes em bancas por tipo",
+            description = "Retorna a quantidade de participacoes em bancas agrupada por tipo para graficos de distribuicao."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Distribuicao de bancas encontrada com sucesso",
+                    content = @Content(array = @ArraySchema(schema = @Schema(implementation = CategoriaQuantidadeDTO.class)))
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "ID Lattes invalido",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Pesquisador nao encontrado",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            )
+    })
+    @GetMapping("/pesquisadores/{id}/bancas/tipos")
+    public ResponseEntity<List<CategoriaQuantidadeDTO>> buscarBancasPorTipo(
+            @Parameter(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
+            @PathVariable String id
+    ) {
+        validarIdLattes(id);
+        return ResponseEntity.ok(dashboardService.buscarBancasPorTipo(id));
+    }
+
+    @Operation(
+            summary = "Orientacoes por status e ano",
+            description = "Retorna orientacoes concluidas e em andamento agrupadas por ano para grafico de barras lado a lado."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Series de orientacoes encontradas com sucesso",
+                    content = @Content(array = @ArraySchema(schema = @Schema(implementation = SerieOrientacaoStatusDTO.class)))
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "ID Lattes invalido",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Pesquisador nao encontrado",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            )
+    })
+    @GetMapping("/pesquisadores/{id}/orientacoes/status-series")
+    public ResponseEntity<List<SerieOrientacaoStatusDTO>> buscarOrientacoesPorStatusAno(
+            @Parameter(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
+            @PathVariable String id
+    ) {
+        validarIdLattes(id);
+        return ResponseEntity.ok(dashboardService.buscarOrientacoesPorStatusAno(id));
+    }
+
+    @Operation(
+            summary = "Resumo Qualis dos artigos de um pesquisador",
+            description = "Retorna cobertura, distribuicao por estrato e serie anual usando a base de referencia CAPES 2021-2024. A mesma base e aplicada aos artigos independentemente do ano de publicacao."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Resumo Qualis encontrado com sucesso",
+                    content = @Content(schema = @Schema(implementation = ResumoQualisDTO.class))
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "ID Lattes invalido",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Pesquisador nao encontrado",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            )
+    })
+    @GetMapping("/pesquisadores/{id}/qualis")
+    public ResponseEntity<ResumoQualisDTO> buscarResumoQualis(
+            @Parameter(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
+            @PathVariable String id
+    ) {
+        validarIdLattes(id);
+        return ResponseEntity.ok(dashboardService.buscarResumoQualis(id));
     }
 
     private void validarIdLattes(String id) {

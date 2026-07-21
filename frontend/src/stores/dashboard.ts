@@ -1,6 +1,10 @@
 import { defineStore } from 'pinia'
 
 import {
+  fetchBancasPorTipo,
+  fetchOrientacoesPorStatusAno,
+  fetchResumoQualis,
+  fetchResumoQualisGrupoAdhoc,
   fetchRankingGrupoAdhoc,
   fetchSerieGrupoAdhoc,
   fetchSerieTemporal,
@@ -9,9 +13,12 @@ import {
 } from '../services/dashboard.service'
 import type {
   RankingPesquisadorItem,
+  CategoriaQuantidadeItem,
   ResumoGrupo,
   ResumoPesquisador,
+  ResumoQualis,
   SerieGrupoItem,
+  SerieOrientacaoStatusItem,
   SerieTemporalItem,
   TipoRankingGrupo,
   TipoSerie,
@@ -26,6 +33,11 @@ interface DashboardState {
   rankingMetrica: TipoRankingGrupo
   resumo: ResumoPesquisador | null
   serie: SerieTemporalItem[]
+  seriesByTipo: Partial<Record<TipoSerie, SerieTemporalItem[]>>
+  bancasPorTipo: CategoriaQuantidadeItem[]
+  orientacoesPorStatusAno: SerieOrientacaoStatusItem[]
+  resumoQualis: ResumoQualis | null
+  resumoQualisGrupo: ResumoQualis | null
   serieTipo: TipoSerie
   loadingResumo: boolean
   loadingSerie: boolean
@@ -45,6 +57,11 @@ export const useDashboardStore = defineStore('dashboard', {
     rankingMetrica: 'total',
     resumo: null,
     serie: [],
+    seriesByTipo: {},
+    bancasPorTipo: [],
+    orientacoesPorStatusAno: [],
+    resumoQualis: null,
+    resumoQualisGrupo: null,
     serieTipo: 'artigos',
     loadingResumo: false,
     loadingSerie: false,
@@ -61,6 +78,11 @@ export const useDashboardStore = defineStore('dashboard', {
       this.currentResumoId = null
       this.resumo = null
       this.serie = []
+      this.seriesByTipo = {}
+      this.bancasPorTipo = []
+      this.orientacoesPorStatusAno = []
+      this.resumoQualis = null
+      this.resumoQualisGrupo = null
 
       try {
         this.resumo = await loadResumoPesquisador(idLattes)
@@ -87,6 +109,44 @@ export const useDashboardStore = defineStore('dashboard', {
         this.loadingSerie = false
       }
     },
+    async loadSeries(idLattes: string, tipos: TipoSerie[]) {
+      this.loadingSerie = true
+      this.errorSerie = null
+      this.seriesByTipo = {}
+      this.bancasPorTipo = []
+      this.orientacoesPorStatusAno = []
+      this.resumoQualis = null
+      this.resumoQualisGrupo = null
+
+      try {
+        const temporalTipos = tipos.filter((tipo) => tipo !== 'bancas' && tipo !== 'orientacoes')
+        const [results, bancasPorTipo, orientacoesPorStatusAno, resumoQualis] = await Promise.all([
+          Promise.all(temporalTipos.map(async (tipo) => {
+            const data = await fetchSerieTemporal(idLattes, tipo)
+            return [tipo, data] as const
+          })),
+          fetchBancasPorTipo(idLattes),
+          fetchOrientacoesPorStatusAno(idLattes),
+          fetchResumoQualis(idLattes),
+        ])
+
+        this.seriesByTipo = Object.fromEntries(results) as Partial<Record<TipoSerie, SerieTemporalItem[]>>
+        this.bancasPorTipo = bancasPorTipo
+        this.orientacoesPorStatusAno = orientacoesPorStatusAno
+        this.resumoQualis = resumoQualis
+        this.serie = this.seriesByTipo.artigos ?? []
+        this.serieTipo = 'artigos'
+      } catch (error) {
+        this.seriesByTipo = {}
+        this.bancasPorTipo = []
+        this.orientacoesPorStatusAno = []
+        this.resumoQualis = null
+        this.serie = []
+        this.errorSerie = error instanceof Error ? error.message : 'Falha ao carregar series.'
+      } finally {
+        this.loadingSerie = false
+      }
+    },
     async loadGrupoAdhoc(idsLattes: string[]) {
       this.loadingResumo = true
       this.errorResumo = null
@@ -99,6 +159,11 @@ export const useDashboardStore = defineStore('dashboard', {
       this.serieGrupo = []
       this.rankingGrupo = []
       this.serie = []
+      this.seriesByTipo = {}
+      this.bancasPorTipo = []
+      this.orientacoesPorStatusAno = []
+      this.resumoQualis = null
+      this.resumoQualisGrupo = null
 
       try {
         this.resumoGrupo = await loadResumoGrupoAdhoc(idsLattes)
@@ -116,8 +181,15 @@ export const useDashboardStore = defineStore('dashboard', {
       this.errorSerie = null
 
       try {
-        this.serieGrupo = await fetchSerieGrupoAdhoc(idsLattes)
+        const [serieGrupo, resumoQualisGrupo] = await Promise.all([
+          fetchSerieGrupoAdhoc(idsLattes),
+          fetchResumoQualisGrupoAdhoc(idsLattes),
+        ])
+        this.serieGrupo = serieGrupo
+        this.resumoQualisGrupo = resumoQualisGrupo
       } catch (error) {
+        this.serieGrupo = []
+        this.resumoQualisGrupo = null
         this.errorSerie = error instanceof Error ? error.message : 'Falha ao carregar serie do grupo.'
       } finally {
         this.loadingSerie = false
@@ -145,6 +217,11 @@ export const useDashboardStore = defineStore('dashboard', {
       this.rankingMetrica = 'total'
       this.resumo = null
       this.serie = []
+      this.seriesByTipo = {}
+      this.bancasPorTipo = []
+      this.orientacoesPorStatusAno = []
+      this.resumoQualis = null
+      this.resumoQualisGrupo = null
       this.errorResumo = null
       this.errorSerie = null
       this.errorRanking = null

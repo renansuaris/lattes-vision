@@ -1,10 +1,16 @@
 package com.lattesvision.backend.service;
 
+import com.lattesvision.backend.dto.CategoriaQuantidadeDTO;
 import com.lattesvision.backend.dto.ResumoPesquisadorDTO;
+import com.lattesvision.backend.dto.CoberturaQualisDTO;
+import com.lattesvision.backend.dto.EstratoQuantidadeDTO;
+import com.lattesvision.backend.dto.ResumoQualisDTO;
 import com.lattesvision.backend.dto.RankingPesquisadorDTO;
 import com.lattesvision.backend.dto.ResumoGrupoDTO;
 import com.lattesvision.backend.dto.SerieTemporalDTO;
 import com.lattesvision.backend.dto.SerieGrupoDTO;
+import com.lattesvision.backend.dto.SerieOrientacaoStatusDTO;
+import com.lattesvision.backend.dto.SerieQualisAnoDTO;
 import com.lattesvision.backend.model.*;
 import com.lattesvision.backend.repository.PesquisadorRepository;
 import org.springframework.http.HttpStatus;
@@ -13,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -94,6 +101,14 @@ public class DashboardService {
                 .collect(Collectors.toList());
     }
 
+    public ResumoQualisDTO buscarResumoQualisGrupoAdhoc(List<String> idsLattes) {
+        List<Pesquisador> pesquisadores = idsLattes.stream()
+                .distinct()
+                .map(this::carregarOuSincronizar)
+                .toList();
+        return montarResumoQualis(pesquisadores);
+    }
+
     private Pesquisador carregarOuSincronizar(String idLattes) {
         Optional<Pesquisador> pesquisadorExistente = pesquisadorRepository.findById(idLattes);
         return pesquisadorExistente.orElseGet(() -> scraperService.sincronizarPesquisador(idLattes));
@@ -162,6 +177,100 @@ public class DashboardService {
                 .collect(Collectors.toList());
     }
 
+    public List<CategoriaQuantidadeDTO> buscarBancasPorTipo(String idLattes) {
+        Pesquisador pesquisador = buscarPorId(idLattes);
+
+        return pesquisador.getBancas().stream()
+                .collect(Collectors.groupingBy(
+                        banca -> normalizarCategoria(banca.getTipo()),
+                        Collectors.counting()
+                ))
+                .entrySet()
+                .stream()
+                .map(entry -> new CategoriaQuantidadeDTO(entry.getKey(), entry.getValue()))
+                .sorted(Comparator
+                        .comparingLong(CategoriaQuantidadeDTO::getQuantidade)
+                        .reversed()
+                        .thenComparing(CategoriaQuantidadeDTO::getCategoria, String.CASE_INSENSITIVE_ORDER))
+                .collect(Collectors.toList());
+    }
+
+    public List<SerieOrientacaoStatusDTO> buscarOrientacoesPorStatusAno(String idLattes) {
+        Pesquisador pesquisador = buscarPorId(idLattes);
+        Map<Integer, SerieOrientacaoStatusDTO> seriesPorAno = new TreeMap<>();
+
+        pesquisador.getOrientacoes().stream()
+                .filter(orientacao -> orientacao.getAno() != null)
+                .forEach(orientacao -> {
+                    SerieOrientacaoStatusDTO serie = seriesPorAno.computeIfAbsent(
+                            orientacao.getAno(),
+                            SerieOrientacaoStatusDTO::new
+                    );
+
+                    if (STATUS_CONCLUIDA.equals(orientacao.getStatus())) {
+                        serie.adicionarConcluida();
+                    } else if (STATUS_EM_ANDAMENTO.equals(orientacao.getStatus())) {
+                        serie.adicionarEmAndamento();
+                    }
+                });
+
+        return List.copyOf(seriesPorAno.values());
+    }
+
+    public ResumoQualisDTO buscarResumoQualis(String idLattes) {
+        return montarResumoQualis(List.of(buscarPorId(idLattes)));
+    }
+
+    private ResumoQualisDTO montarResumoQualis(List<Pesquisador> pesquisadores) {
+        Map<EstratoQualis, Long> distribuicao = new EnumMap<>(EstratoQualis.class);
+        Map<Integer, SerieQualisAnoDTO> seriePorAno = new TreeMap<>();
+        long classificados = 0;
+        long semIssn = 0;
+        long total = 0;
+
+        for (EstratoQualis estrato : EstratoQualis.values()) {
+            distribuicao.put(estrato, 0L);
+        }
+
+        for (Pesquisador pesquisador : pesquisadores) {
+            total += pesquisador.getArtigos().size();
+            for (Artigo artigo : pesquisador.getArtigos()) {
+                if (artigo.getStatusQualis() == StatusClassificacaoQualis.SEM_ISSN) {
+                    semIssn++;
+                }
+
+                ClassificacaoQualis classificacao = artigo.getClassificacaoQualis();
+                if (artigo.getStatusQualis() != StatusClassificacaoQualis.CLASSIFICADO
+                        || classificacao == null
+                        || classificacao.getEstrato() == null) {
+                    continue;
+                }
+
+                EstratoQualis estrato = classificacao.getEstrato();
+                classificados++;
+                distribuicao.merge(estrato, 1L, Long::sum);
+
+                if (artigo.getAno() != null) {
+                    seriePorAno.computeIfAbsent(artigo.getAno(), SerieQualisAnoDTO::new)
+                            .adicionar(estrato);
+                }
+            }
+        }
+
+        long naoClassificados = total - classificados - semIssn;
+        List<EstratoQuantidadeDTO> distribuicaoOrdenada = java.util.Arrays.stream(EstratoQualis.values())
+                .map(estrato -> new EstratoQuantidadeDTO(estrato, distribuicao.get(estrato)))
+                .toList();
+
+        return new ResumoQualisDTO(
+                "2021-2024",
+                "CAPES/SUCUPIRA",
+                new CoberturaQualisDTO(total, classificados, semIssn, naoClassificados),
+                distribuicaoOrdenada,
+                List.copyOf(seriePorAno.values())
+        );
+    }
+
     private Pesquisador buscarPorId(String idLattes) {
         return pesquisadorRepository.findById(idLattes)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -175,6 +284,19 @@ public class DashboardService {
                 .map(Orientacao::getStatus)
                 .filter(status::equals)
                 .count();
+    }
+
+    private String normalizarCategoria(String categoria) {
+        if (categoria == null || categoria.isBlank()) {
+            return "Outra";
+        }
+
+        String categoriaNormalizada = categoria.trim();
+        if ("TCC".equalsIgnoreCase(categoriaNormalizada)) {
+            return "Graduacao";
+        }
+
+        return categoriaNormalizada;
     }
 
     private long somar(List<ResumoPesquisadorDTO> pesquisadores, java.util.function.ToLongFunction<ResumoPesquisadorDTO> campo) {
