@@ -44,6 +44,15 @@ public class ResumoPesquisadorDTO {
     @Schema(description = "Total de trabalhos em eventos persistidos para o pesquisador", example = "15")
     private long totalTrabalhosEventos;
 
+    @Schema(description = "Total de livros publicados, organizados ou editados", example = "2")
+    private long totalLivros;
+
+    @Schema(description = "Total de capitulos de livros publicados", example = "5")
+    private long totalCapitulos;
+
+    @Schema(description = "Total de itens de producao bibliografica", example = "34")
+    private long totalProducaoBibliografica;
+
     public String getIdLattes() {
         return idLattes;
     }
@@ -138,5 +147,29 @@ public class ResumoPesquisadorDTO {
 
     public void setTotalTrabalhosEventos(long totalTrabalhosEventos) {
         this.totalTrabalhosEventos = totalTrabalhosEventos;
+    }
+
+    public long getTotalLivros() {
+        return totalLivros;
+    }
+
+    public void setTotalLivros(long totalLivros) {
+        this.totalLivros = totalLivros;
+    }
+
+    public long getTotalCapitulos() {
+        return totalCapitulos;
+    }
+
+    public void setTotalCapitulos(long totalCapitulos) {
+        this.totalCapitulos = totalCapitulos;
+    }
+
+    public long getTotalProducaoBibliografica() {
+        return totalProducaoBibliografica;
+    }
+
+    public void setTotalProducaoBibliografica(long totalProducaoBibliografica) {
+        this.totalProducaoBibliografica = totalProducaoBibliografica;
     }
 }

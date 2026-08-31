@@ -2,6 +2,10 @@ import { AxiosError } from 'axios'
 
 import { api } from './api'
 import type {
+  ArticleFilters,
+  ArticlePage,
+  OrientationFilters,
+  OrientationPage,
   ApiErrorResponse,
   CategoriaQuantidadeItem,
   RankingPesquisadorItem,
@@ -16,16 +20,16 @@ import type {
 } from '../types/dashboard'
 
 const LOAD_REQUEST_TIMEOUT_MS = 5 * 60 * 1000
-const LOAD_TIMEOUT_MESSAGE = 'A consulta está demorando mais que o esperado. O servidor pode continuar processando os currículos; aguarde alguns minutos antes de tentar novamente.'
+const LOAD_TIMEOUT_MESSAGE = 'A importação está levando mais tempo que o normal. Aguarde alguns instantes e atualize a página.'
 
 function extractApiError(error: unknown, timeoutMessage?: string): string {
   const axiosError = error as AxiosError<ApiErrorResponse>
 
   if (axiosError.code === 'ECONNABORTED' || axiosError.code === 'ETIMEDOUT') {
-    return timeoutMessage ?? 'A requisição excedeu o tempo limite. Tente novamente.'
+    return timeoutMessage ?? 'A consulta levou mais tempo que o esperado. Tente novamente.'
   }
 
-  return axiosError.response?.data?.message ?? 'Falha ao comunicar com o backend.'
+  return axiosError.response?.data?.message ?? 'Não foi possível acessar o LattesVision. Tente novamente.'
 }
 
 export async function loadResumoPesquisador(idLattes: string): Promise<ResumoPesquisador> {
@@ -128,6 +132,46 @@ export async function fetchResumoQualisGrupoAdhoc(idsLattes: string[]): Promise<
   try {
     const response = await api.post<ResumoQualis>('/dashboard/grupo-adhoc/qualis', {
       idsLattes,
+    })
+    return response.data
+  } catch (error) {
+    throw new Error(extractApiError(error))
+  }
+}
+
+export async function fetchArticles(
+  idLattes: string,
+  filters: ArticleFilters,
+  page = 0,
+  size = 20,
+): Promise<ArticlePage> {
+  try {
+    const response = await api.get<ArticlePage>(`/dashboard/pesquisadores/${idLattes}/artigos`, {
+      params: {
+        ...filters,
+        page,
+        size,
+      },
+    })
+    return response.data
+  } catch (error) {
+    throw new Error(extractApiError(error))
+  }
+}
+
+export async function fetchOrientations(
+  idLattes: string,
+  filters: OrientationFilters,
+  page = 0,
+  size = 20,
+): Promise<OrientationPage> {
+  try {
+    const response = await api.get<OrientationPage>(`/dashboard/pesquisadores/${idLattes}/orientacoes`, {
+      params: {
+        ...filters,
+        page,
+        size,
+      },
     })
     return response.data
   } catch (error) {

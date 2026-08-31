@@ -44,6 +44,12 @@ public class Pesquisador {
     @OneToMany(mappedBy = "pesquisador", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TrabalhoEvento> trabalhosEventos = new ArrayList<>();
 
+    @OneToMany(mappedBy = "pesquisador", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Livro> livros = new ArrayList<>();
+
+    @OneToMany(mappedBy = "pesquisador", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CapituloLivro> capitulosLivros = new ArrayList<>();
+
     public Pesquisador() {
     }
 
@@ -171,5 +177,31 @@ public class Pesquisador {
     public void addTrabalhoEvento(TrabalhoEvento trabalhoEvento) {
         trabalhosEventos.add(trabalhoEvento);
         trabalhoEvento.setPesquisador(this);
+    }
+
+    public List<Livro> getLivros() {
+        return livros;
+    }
+
+    public void setLivros(List<Livro> livros) {
+        this.livros = livros;
+    }
+
+    public void addLivro(Livro livro) {
+        livros.add(livro);
+        livro.setPesquisador(this);
+    }
+
+    public List<CapituloLivro> getCapitulosLivros() {
+        return capitulosLivros;
+    }
+
+    public void setCapitulosLivros(List<CapituloLivro> capitulosLivros) {
+        this.capitulosLivros = capitulosLivros;
+    }
+
+    public void addCapituloLivro(CapituloLivro capituloLivro) {
+        capitulosLivros.add(capituloLivro);
+        capituloLivro.setPesquisador(this);
     }
 }

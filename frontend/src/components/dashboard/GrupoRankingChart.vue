@@ -15,7 +15,7 @@ const props = defineProps<{
 
 const chartRoot = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
-const chartFontFamily = 'Inter, "Segoe UI", SegoeUI, "Helvetica Neue", Helvetica, Arial, sans-serif'
+const chartFontFamily = 'Poppins, "Segoe UI", Arial, sans-serif'
 
 function shortName(item: RankingPesquisadorItem) {
   return item.nomeCompleto || `ID ${item.idLattes}`
@@ -34,7 +34,7 @@ function renderChart() {
     animationDuration: 500,
     textStyle: {
       fontFamily: chartFontFamily,
-      color: '#1f2937',
+      color: '#343a40',
     },
     tooltip: {
       trigger: 'axis',
@@ -42,10 +42,10 @@ function renderChart() {
         type: 'shadow',
       },
       backgroundColor: '#ffffff',
-      borderColor: '#d8e3f0',
+      borderColor: '#dee2e6',
       borderWidth: 1,
       textStyle: {
-        color: '#1f2937',
+        color: '#343a40',
         fontFamily: chartFontFamily,
       },
       formatter(params: unknown) {
@@ -65,11 +65,11 @@ function renderChart() {
       minInterval: 1,
       splitLine: {
         lineStyle: {
-          color: '#e6eef7',
+          color: '#e9ecef',
         },
       },
       axisLabel: {
-        color: '#6b7280',
+        color: '#6c757d',
         fontFamily: chartFontFamily,
       },
     },
@@ -79,11 +79,11 @@ function renderChart() {
       data: props.data.map(shortName),
       axisLine: {
         lineStyle: {
-          color: '#d8e3f0',
+          color: '#dee2e6',
         },
       },
       axisLabel: {
-        color: '#374151',
+        color: '#495057',
         fontFamily: chartFontFamily,
         width: 150,
         overflow: 'truncate',
@@ -96,13 +96,13 @@ function renderChart() {
         data: props.data.map((item) => item.quantidade),
         barMaxWidth: 28,
         itemStyle: {
-          color: '#1976c9',
-          borderRadius: [0, 3, 3, 0],
+          color: '#29488d',
+          borderRadius: [0, 2, 2, 0],
         },
         label: {
           show: true,
           position: 'right',
-          color: '#1f2937',
+          color: '#343a40',
           fontFamily: chartFontFamily,
         },
       },

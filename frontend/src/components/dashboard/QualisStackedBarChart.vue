@@ -10,17 +10,22 @@ import type { EstratoQualis, SerieQualisAnoItem } from '../../types/dashboard'
 
 const props = defineProps<{
   data: SerieQualisAnoItem[]
+  interactive?: boolean
+}>()
+
+const emit = defineEmits<{
+  selectQualis: [payload: { ano: number; estrato: EstratoQualis }]
 }>()
 
 const chartRoot = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
-const chartFontFamily = 'Inter, "Segoe UI", SegoeUI, "Helvetica Neue", Helvetica, Arial, sans-serif'
+const chartFontFamily = 'Poppins, "Segoe UI", Arial, sans-serif'
 const estratos: EstratoQualis[] = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C']
 const colors: Record<EstratoQualis, string> = {
-  A1: '#0b4f6c',
-  A2: '#1976c9',
-  A3: '#4f9bd3',
-  A4: '#8dc2df',
+  A1: '#213c78',
+  A2: '#29488d',
+  A3: '#6b82b0',
+  A4: '#9aa9c8',
   B1: '#4f772d',
   B2: '#719b45',
   B3: '#98b969',
@@ -42,14 +47,14 @@ function renderChart() {
     color: estratos.map((estrato) => colors[estrato]),
     textStyle: {
       fontFamily: chartFontFamily,
-      color: '#1f2937',
+      color: '#343a40',
     },
     legend: {
       type: 'scroll',
       top: 4,
       data: estratos,
       textStyle: {
-        color: '#4b5563',
+        color: '#495057',
         fontFamily: chartFontFamily,
       },
     },
@@ -63,27 +68,27 @@ function renderChart() {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
       backgroundColor: '#ffffff',
-      borderColor: '#d8e3f0',
+      borderColor: '#dee2e6',
       borderWidth: 1,
       padding: 10,
       textStyle: {
-        color: '#1f2937',
+        color: '#343a40',
         fontFamily: chartFontFamily,
       },
     },
     xAxis: {
       type: 'category',
       data: props.data.map((item) => item.ano),
-      axisLine: { lineStyle: { color: '#d8e3f0' } },
-      axisLabel: { color: '#6b7280', fontFamily: chartFontFamily },
+      axisLine: { lineStyle: { color: '#dee2e6' } },
+      axisLabel: { color: '#6c757d', fontFamily: chartFontFamily },
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
       name: 'Artigos',
-      nameTextStyle: { color: '#6b7280', fontFamily: chartFontFamily },
-      splitLine: { lineStyle: { color: '#e6eef7' } },
-      axisLabel: { color: '#6b7280', fontFamily: chartFontFamily },
+      nameTextStyle: { color: '#6c757d', fontFamily: chartFontFamily },
+      splitLine: { lineStyle: { color: '#e9ecef' } },
+      axisLabel: { color: '#6c757d', fontFamily: chartFontFamily },
     },
     series: estratos.map((estrato) => ({
       name: estrato,
@@ -91,6 +96,7 @@ function renderChart() {
       stack: 'qualis',
       emphasis: { focus: 'series' },
       data: props.data.map((item) => item.estratos[estrato] ?? 0),
+      cursor: props.interactive ? 'pointer' : 'default',
     })),
   }, true)
 }
@@ -99,8 +105,21 @@ function resizeChart() {
   chart?.resize()
 }
 
+function handleChartClick(event: { dataIndex?: number; seriesName?: string }) {
+  if (!props.interactive || event.dataIndex == null || !event.seriesName) {
+    return
+  }
+
+  const ano = props.data[event.dataIndex]?.ano
+  const estrato = event.seriesName as EstratoQualis
+  if (ano != null && estratos.includes(estrato)) {
+    emit('selectQualis', { ano, estrato })
+  }
+}
+
 onMounted(() => {
   renderChart()
+  chart?.on('click', handleChartClick)
   window.addEventListener('resize', resizeChart)
 })
 

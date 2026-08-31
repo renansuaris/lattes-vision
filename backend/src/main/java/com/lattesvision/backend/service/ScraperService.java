@@ -4,6 +4,8 @@ import com.lattesvision.backend.model.*;
 import com.lattesvision.backend.repository.PesquisadorRepository;
 import com.lattesvision.backend.service.parser.ArtigoParser;
 import com.lattesvision.backend.service.parser.BancaParser;
+import com.lattesvision.backend.service.parser.CapituloLivroParser;
+import com.lattesvision.backend.service.parser.LivroParser;
 import com.lattesvision.backend.service.parser.OrientacaoParser;
 import com.lattesvision.backend.service.parser.ProducaoTecnicaParser;
 import com.lattesvision.backend.service.parser.ProjetoParser;
@@ -165,6 +167,8 @@ public class ScraperService {
         List<Banca> bancas = BancaParser.parse(doc);
         List<ProducaoTecnica> producoesTecnicas = ProducaoTecnicaParser.parse(doc);
         List<TrabalhoEvento> trabalhosEventos = TrabalhoEventoParser.parse(doc);
+        List<Livro> livros = LivroParser.parse(doc);
+        List<CapituloLivro> capitulosLivros = CapituloLivroParser.parse(doc);
 
         pesquisador.getArtigos().clear();
         artigos.forEach(pesquisador::addArtigo);
@@ -184,14 +188,22 @@ public class ScraperService {
         pesquisador.getTrabalhosEventos().clear();
         trabalhosEventos.forEach(pesquisador::addTrabalhoEvento);
 
-        log.info("Salvando pesquisador: {} | Artigos: {} | Orientacoes: {} | Projetos: {} | Bancas: {} | Producoes tecnicas: {} | Trabalhos em eventos: {}",
+        pesquisador.getLivros().clear();
+        livros.forEach(pesquisador::addLivro);
+
+        pesquisador.getCapitulosLivros().clear();
+        capitulosLivros.forEach(pesquisador::addCapituloLivro);
+
+        log.info("Salvando pesquisador: {} | Artigos: {} | Orientacoes: {} | Projetos: {} | Bancas: {} | Producoes tecnicas: {} | Trabalhos em eventos: {} | Livros: {} | Capitulos: {}",
                 pesquisador.getNomeCompleto(),
                 pesquisador.getArtigos().size(),
                 pesquisador.getOrientacoes().size(),
                 pesquisador.getProjetos().size(),
                 pesquisador.getBancas().size(),
                 pesquisador.getProducoesTecnicas().size(),
-                pesquisador.getTrabalhosEventos().size());
+                pesquisador.getTrabalhosEventos().size(),
+                pesquisador.getLivros().size(),
+                pesquisador.getCapitulosLivros().size());
 
         return repository.save(pesquisador);
     }

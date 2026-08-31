@@ -10,11 +10,16 @@ import type { SerieOrientacaoStatusItem } from '../../types/dashboard'
 
 const props = defineProps<{
   data: SerieOrientacaoStatusItem[]
+  interactive?: boolean
+}>()
+
+const emit = defineEmits<{
+  selectOrientation: [payload: { ano: number; status: 'CONCLUIDA' | 'EM_ANDAMENTO' }]
 }>()
 
 const chartRoot = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
-const chartFontFamily = 'Inter, "Segoe UI", SegoeUI, "Helvetica Neue", Helvetica, Arial, sans-serif'
+const chartFontFamily = 'Poppins, "Segoe UI", Arial, sans-serif'
 
 function renderChart() {
   if (!chartRoot.value) {
@@ -30,7 +35,7 @@ function renderChart() {
     color: ['#639922', '#C0DD97'],
     textStyle: {
       fontFamily: chartFontFamily,
-      color: '#1f2937',
+      color: '#343a40',
     },
     grid: {
       top: 24,
@@ -44,11 +49,11 @@ function renderChart() {
         type: 'shadow',
       },
       backgroundColor: '#ffffff',
-      borderColor: '#d8e3f0',
+      borderColor: '#dee2e6',
       borderWidth: 1,
       padding: 10,
       textStyle: {
-        color: '#1f2937',
+        color: '#343a40',
         fontFamily: chartFontFamily,
       },
     },
@@ -57,7 +62,7 @@ function renderChart() {
       left: 'center',
       itemGap: 18,
       textStyle: {
-        color: '#1f2937',
+        color: '#343a40',
         fontFamily: chartFontFamily,
       },
     },
@@ -66,11 +71,11 @@ function renderChart() {
       data: props.data.map((item) => item.ano),
       axisLine: {
         lineStyle: {
-          color: '#d8e3f0',
+          color: '#dee2e6',
         },
       },
       axisLabel: {
-        color: '#6b7280',
+        color: '#6c757d',
         fontFamily: chartFontFamily,
       },
     },
@@ -79,11 +84,11 @@ function renderChart() {
       minInterval: 1,
       splitLine: {
         lineStyle: {
-          color: '#e6eef7',
+          color: '#e9ecef',
         },
       },
       axisLabel: {
-        color: '#6b7280',
+        color: '#6c757d',
         fontFamily: chartFontFamily,
       },
     },
@@ -94,9 +99,10 @@ function renderChart() {
         data: props.data.map((item) => item.concluidas),
         barMaxWidth: 28,
         itemStyle: {
-          borderRadius: [6, 6, 0, 0],
+          borderRadius: [2, 2, 0, 0],
           color: '#639922',
         },
+        cursor: props.interactive ? 'pointer' : 'default',
       },
       {
         name: 'Em andamento',
@@ -104,9 +110,10 @@ function renderChart() {
         data: props.data.map((item) => item.emAndamento),
         barMaxWidth: 28,
         itemStyle: {
-          borderRadius: [6, 6, 0, 0],
+          borderRadius: [2, 2, 0, 0],
           color: '#C0DD97',
         },
+        cursor: props.interactive ? 'pointer' : 'default',
       },
     ],
   }, true)
@@ -116,8 +123,25 @@ function resizeChart() {
   chart?.resize()
 }
 
+function handleChartClick(event: { dataIndex?: number; seriesName?: string }) {
+  if (!props.interactive || event.dataIndex == null) {
+    return
+  }
+
+  const ano = props.data[event.dataIndex]?.ano
+  const status = event.seriesName === 'Concluídas'
+    ? 'CONCLUIDA'
+    : event.seriesName === 'Em andamento'
+      ? 'EM_ANDAMENTO'
+      : null
+  if (ano != null && status) {
+    emit('selectOrientation', { ano, status })
+  }
+}
+
 onMounted(() => {
   renderChart()
+  chart?.on('click', handleChartClick)
   window.addEventListener('resize', resizeChart)
 })
 

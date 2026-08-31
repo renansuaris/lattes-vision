@@ -14,11 +14,11 @@ const props = defineProps<{
 
 const chartRoot = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
-const chartFontFamily = 'Inter, "Segoe UI", SegoeUI, "Helvetica Neue", Helvetica, Arial, sans-serif'
+const chartFontFamily = 'Poppins, "Segoe UI", Arial, sans-serif'
 
 const seriesConfig = [
-  { key: 'artigos', name: 'Artigos em periódicos', color: '#1976c9' },
-  { key: 'trabalhosEventos', name: 'Trabalhos em eventos', color: '#0b3f75' },
+  { key: 'artigos', name: 'Artigos em periódicos', color: '#29488d' },
+  { key: 'trabalhosEventos', name: 'Trabalhos em eventos', color: '#6b82b0' },
   { key: 'producoesTecnicas', name: 'Produções técnicas', color: '#1e8e3e' },
   { key: 'orientacoes', name: 'Orientações', color: '#8a5cf6' },
   { key: 'projetos', name: 'Projetos', color: '#d97706' },
@@ -39,15 +39,15 @@ function renderChart() {
     color: seriesConfig.map((item) => item.color),
     textStyle: {
       fontFamily: chartFontFamily,
-      color: '#1f2937',
+      color: '#343a40',
     },
     tooltip: {
       trigger: 'axis',
       backgroundColor: '#ffffff',
-      borderColor: '#d8e3f0',
+      borderColor: '#dee2e6',
       borderWidth: 1,
       textStyle: {
-        color: '#1f2937',
+        color: '#343a40',
         fontFamily: chartFontFamily,
       },
     },
@@ -55,7 +55,7 @@ function renderChart() {
       top: 0,
       type: 'scroll',
       textStyle: {
-        color: '#1f2937',
+        color: '#343a40',
         fontFamily: chartFontFamily,
       },
     },
@@ -71,11 +71,11 @@ function renderChart() {
       data: props.data.map((item) => item.ano),
       axisLine: {
         lineStyle: {
-          color: '#d8e3f0',
+          color: '#dee2e6',
         },
       },
       axisLabel: {
-        color: '#6b7280',
+        color: '#6c757d',
         fontFamily: chartFontFamily,
       },
     },
@@ -84,11 +84,11 @@ function renderChart() {
       minInterval: 1,
       splitLine: {
         lineStyle: {
-          color: '#e6eef7',
+          color: '#e9ecef',
         },
       },
       axisLabel: {
-        color: '#6b7280',
+        color: '#6c757d',
         fontFamily: chartFontFamily,
       },
     },

@@ -21,7 +21,9 @@ public final class OrientacaoParser {
 
     public static List<Orientacao> parse(Document doc) {
         List<Orientacao> orientacoes = new ArrayList<>();
-        Elements elementos = doc.select("h1, h2, div.layout-cell-11, div.layout-cell-pad-5, div.layout-cell-pad-6");
+        Elements elementos = doc.select(
+                "h1, h2, h3, div.inst_back, div.layout-cell-11, div.layout-cell-pad-5, div.layout-cell-pad-6"
+        );
 
         String statusAtual = null; // null significa que o motor de extração está DESLIGADO
 
@@ -30,9 +32,9 @@ public final class OrientacaoParser {
 
             // 1. Controle da Máquina de Estados (Interruptor de Seção)
             if (isTitulo(el, texto)) {
-                String titulo = texto.toLowerCase(Locale.ROOT);
+                String titulo = normalizarParaBusca(texto);
 
-                if (titulo.contains("orientações") || titulo.contains("orientacoes")) {
+                if (titulo.contains("orientacoes")) {
                     if (titulo.contains("em andamento")) {
                         statusAtual = "EM_ANDAMENTO";
                     } else {
@@ -80,8 +82,11 @@ public final class OrientacaoParser {
 
     private static boolean isTitulo(Element el, String texto) {
         // Títulos no Lattes podem ser h1/h2 ou divs curtas com a palavra chave
-        return "h1".equals(el.tagName()) || "h2".equals(el.tagName()) ||
-                (texto.length() < 60 && texto.toLowerCase().contains("orientações e supervisões"));
+        return "h1".equals(el.tagName())
+                || "h2".equals(el.tagName())
+                || "h3".equals(el.tagName())
+                || el.hasClass("inst_back")
+                || (texto.length() < 60 && normalizarParaBusca(texto).contains("orientacoes e supervisoes"));
     }
 
     private static String detectarTipo(String texto) {

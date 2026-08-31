@@ -22,7 +22,9 @@ public final class ProjetoParser {
     public static List<Projeto> parse(Document doc) {
         List<Projeto> projetos = new ArrayList<>();
         // O Jsoup lê de cima para baixo na ordem exata da tela
-        Elements elementos = doc.select("h1, h2, div.layout-cell-11, div.layout-cell-pad-5, div.layout-cell-pad-6");
+        Elements elementos = doc.select(
+                "h1, h2, h3, div.inst_back, div.cita-artigos, div.layout-cell-11, div.layout-cell-pad-5, div.layout-cell-pad-6"
+        );
 
         boolean dentroDaSecao = false;
         String tipoAtual = "Projeto";
@@ -77,8 +79,12 @@ public final class ProjetoParser {
 
     private static boolean isTitulo(Element el, String texto) {
         // Melhorei a heurística: Títulos podem ser h1/h2 ou divs curtas com a palavra "projetos de"
-        return "h1".equals(el.tagName()) || "h2".equals(el.tagName()) ||
-                (texto.length() < 60 && texto.toLowerCase().contains("projetos de"));
+        return "h1".equals(el.tagName())
+                || "h2".equals(el.tagName())
+                || "h3".equals(el.tagName())
+                || el.hasClass("inst_back")
+                || el.hasClass("cita-artigos")
+                || (texto.length() < 60 && texto.toLowerCase().contains("projetos de"));
     }
 
     private static String detectarTipoPeloTitulo(String titulo) {

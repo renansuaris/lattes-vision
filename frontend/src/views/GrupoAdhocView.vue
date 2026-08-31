@@ -3,14 +3,14 @@
     <header class="dashboard-header">
       <div>
         <RouterLink class="back-link" to="/">Voltar para consulta</RouterLink>
-        <p class="eyebrow">Grupo ad-hoc</p>
+        <p class="eyebrow">Grupo</p>
         <h1 class="dashboard-title">Análise de grupo</h1>
         <p class="lead">{{ totalIdsLabel }}</p>
       </div>
 
       <div class="dashboard-actions">
         <button class="button button-secondary" type="button" @click.prevent>
-          Exportar Dados
+          Exportar dados
         </button>
       </div>
     </header>
@@ -36,37 +36,20 @@
         </article>
       </section>
 
-      <section class="filter-panel" aria-label="Filtros do dashboard de grupo">
-        <div class="filter-panel__title">
-          <h2>Filtros</h2>
-          <span>Em preparação</span>
-        </div>
-
-        <div class="filter-fields">
-          <label class="field-group">
-            <span class="field-label">Período inicial</span>
-            <input class="text-input" type="number" value="2000" disabled />
-          </label>
-
-          <label class="field-group">
-            <span class="field-label">Período final</span>
-            <input class="text-input" type="number" value="2026" disabled />
-          </label>
-
-          <button class="button button-secondary" type="button" disabled>
-            Aplicar filtros
-          </button>
-        </div>
-      </section>
+      <BibliographicProductionPanel
+        :total="store.resumoGrupo.totalProducaoBibliografica"
+        :artigos="store.resumoGrupo.totalArtigos"
+        :trabalhos-eventos="store.resumoGrupo.totalTrabalhosEventos"
+        :livros="store.resumoGrupo.totalLivros"
+        :capitulos="store.resumoGrupo.totalCapitulos"
+      />
 
       <section class="panel chart-panel">
         <div class="panel-body">
           <div class="section-header">
             <div>
               <h2 class="section-title">Produção por ano</h2>
-              <p class="section-subtitle">
-                Evolução anual das produções acadêmicas por tipo.
-              </p>
+              <p class="section-subtitle">Produção acadêmica do grupo ao longo dos anos.</p>
             </div>
           </div>
 
@@ -100,13 +83,11 @@
           <div class="section-header">
             <div>
               <h2 class="section-title">Ranking de pesquisadores</h2>
-              <p class="section-subtitle">
-                Comparacao dos pesquisadores do grupo pela metrica selecionada.
-              </p>
+              <p class="section-subtitle">Comparação por indicador selecionado.</p>
             </div>
 
             <label class="ranking-select">
-              <span class="field-label">Metrica</span>
+              <span class="field-label">Indicador</span>
               <select v-model="selectedRankingMetric" class="select-input">
                 <option
                   v-for="option in rankingOptions"
@@ -143,8 +124,8 @@
         <div class="panel-body">
           <div class="section-header">
             <div>
-              <h2 class="section-title">Pesquisadores analisados</h2>
-              <p class="section-subtitle">Resumo individual usado na consolidação do grupo.</p>
+              <h2 class="section-title">Membros do grupo</h2>
+              <p class="section-subtitle">Pesquisadores incluídos nesta análise.</p>
             </div>
           </div>
 
@@ -176,6 +157,7 @@
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import BibliographicProductionPanel from '../components/dashboard/BibliographicProductionPanel.vue'
 import GrupoRankingChart from '../components/dashboard/GrupoRankingChart.vue'
 import GrupoStackedLineChart from '../components/dashboard/GrupoStackedLineChart.vue'
 import QualisSummaryPanel from '../components/dashboard/QualisSummaryPanel.vue'
@@ -190,8 +172,8 @@ const rankingOptions: Array<{ label: string; value: TipoRankingGrupo }> = [
   { label: 'Total geral', value: 'total' },
   { label: 'Artigos', value: 'artigos' },
   { label: 'Trabalhos em eventos', value: 'trabalhos_eventos' },
-  { label: 'Producoes tecnicas', value: 'producoes_tecnicas' },
-  { label: 'Orientacoes', value: 'orientacoes' },
+  { label: 'Produções técnicas', value: 'producoes_tecnicas' },
+  { label: 'Orientações', value: 'orientacoes' },
   { label: 'Projetos', value: 'projetos' },
   { label: 'Bancas', value: 'bancas' },
 ]
@@ -217,13 +199,10 @@ const summaryCards = computed(() => {
   }
 
   return [
-    { label: 'Pesquisadores', value: resumo.totalPesquisadores, meta: 'Currículos considerados na análise.' },
-    { label: 'Artigos', value: resumo.totalArtigos, meta: 'Total agregado do grupo.' },
     { label: 'Orientações', value: resumo.totalOrientacoes, meta: `${resumo.totalOrientacoesConcluidas} concluídas / ${resumo.totalOrientacoesEmAndamento} em andamento` },
-    { label: 'Projetos', value: resumo.totalProjetos, meta: 'Projetos vinculados aos currículos.' },
-    { label: 'Bancas', value: resumo.totalBancas, meta: 'Participações em bancas extraídas.' },
-    { label: 'Prod. técnicas', value: resumo.totalProducoesTecnicas, meta: 'Categorias técnicas consolidadas.' },
-    { label: 'Trab. eventos', value: resumo.totalTrabalhosEventos, meta: 'Trabalhos completos em anais.' },
+    { label: 'Projetos', value: resumo.totalProjetos, meta: 'Pesquisa, extensão e desenvolvimento.' },
+    { label: 'Bancas', value: resumo.totalBancas, meta: 'Participações registradas.' },
+    { label: 'Prod. técnicas', value: resumo.totalProducoesTecnicas, meta: 'Softwares, produtos e outros.' },
   ]
 })
 

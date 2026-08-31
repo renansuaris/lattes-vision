@@ -12,7 +12,7 @@
 
       <div class="dashboard-actions">
         <button class="button button-secondary" type="button" @click.prevent>
-          Exportar Dados
+          Exportar dados
         </button>
       </div>
     </header>
@@ -22,8 +22,7 @@
     </section>
 
     <section v-else-if="store.loadingResumo" class="status-box">
-      Consultando base local. Se o pesquisador não estiver cadastrado, a sincronização com o
-      Lattes será iniciada automaticamente.
+      Buscando dados do currículo. No primeiro acesso, isso pode levar alguns segundos.
     </section>
 
     <template v-else-if="currentResumo">
@@ -32,6 +31,11 @@
           v-for="card in summaryCards"
           :key="card.label"
           class="stat-card"
+          :class="{ 'stat-card--interactive': isDrilldownCard(card.key) }"
+          :role="isDrilldownCard(card.key) ? 'button' : undefined"
+          :tabindex="isDrilldownCard(card.key) ? 0 : undefined"
+          @click="openSummaryCard(card.key)"
+          @keydown.enter="openSummaryCard(card.key)"
         >
           <span class="stat-label">{{ card.label }}</span>
           <strong class="stat-value">{{ card.value }}</strong>
@@ -39,32 +43,19 @@
         </article>
       </section>
 
-      <section class="filter-panel" aria-label="Filtros do dashboard">
-        <div class="filter-panel__title">
-          <h2>Filtros</h2>
-          <span>Em preparação</span>
-        </div>
-
-        <div class="filter-fields">
-          <label class="field-group">
-            <span class="field-label">Período inicial</span>
-            <input class="text-input" type="number" value="2000" disabled />
-          </label>
-
-          <label class="field-group">
-            <span class="field-label">Período final</span>
-            <input class="text-input" type="number" value="2026" disabled />
-          </label>
-
-          <button class="button button-secondary" type="button" disabled>
-            Aplicar filtros
-          </button>
-        </div>
-      </section>
+      <BibliographicProductionPanel
+        :total="currentResumo.totalProducaoBibliografica"
+        :artigos="currentResumo.totalArtigos"
+        :trabalhos-eventos="currentResumo.totalTrabalhosEventos"
+        :livros="currentResumo.totalLivros"
+        :capitulos="currentResumo.totalCapitulos"
+      />
 
       <QualisSummaryPanel
         v-if="store.resumoQualis"
         :resumo="store.resumoQualis"
+        interactive
+        @open-articles="openArticleDetails"
       />
 
       <section class="panel chart-panel">
@@ -72,9 +63,7 @@
           <div class="section-header">
             <div>
               <h2 class="section-title">Séries temporais</h2>
-              <p class="section-subtitle">
-                Indicadores anuais do currículo, exibidos por categoria de produção.
-              </p>
+              <p class="section-subtitle">Produção acadêmica ao longo dos anos.</p>
             </div>
           </div>
 
@@ -83,7 +72,7 @@
           </section>
 
           <section v-else-if="store.loadingSerie && !hasChartData" class="status-box">
-            Carregando series temporais...
+            Carregando séries temporais...
           </section>
 
           <section v-else-if="!hasChartData" class="status-box">
@@ -116,6 +105,8 @@
               <OrientacaoStatusChart
                 v-else-if="card.value === 'orientacoes'"
                 :data="store.orientacoesPorStatusAno"
+                interactive
+                @select-orientation="openOrientationDetails({ ano: $event.ano, status: $event.status })"
               />
 
               <SerieChart
@@ -123,6 +114,8 @@
                 :data="getSerieData(card.value)"
                 :label="card.label"
                 :chart-type="card.value === 'artigos' ? 'line' : 'bar'"
+                :interactive="card.value === 'artigos'"
+                @select-year="openArticleDetails({ ano: $event })"
               />
             </article>
           </div>
@@ -136,27 +129,56 @@
         </article>
 
         <article class="metadata-item">
-          <span class="metadata-label">Última sincronização local</span>
+          <span class="metadata-label">Dados consultados em</span>
           <div class="metadata-value">{{ formatDateTime(currentResumo.dataSincronizacao) }}</div>
         </article>
       </section>
     </template>
+
+    <DashboardDrilldownModal
+      :open="activeDrilldown !== null"
+      :title="drilldownTitle"
+      :subtitle="drilldownSubtitle"
+      :columns="drilldownColumns"
+      :rows="drilldownRows"
+      :page="drilldownPage"
+      :loading="drilldownLoading"
+      :error="drilldownError"
+      :loading-message="drilldownLoadingMessage"
+      :empty-message="drilldownEmptyMessage"
+      :total-label="drilldownTotalLabel"
+      :total-label-plural="drilldownTotalLabelPlural"
+      @close="closeDrilldown"
+      @change-page="changeDrilldownPage"
+    />
   </main>
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
+import BibliographicProductionPanel from '../components/dashboard/BibliographicProductionPanel.vue'
 import CategoryPieChart from '../components/dashboard/CategoryPieChart.vue'
+import DashboardDrilldownModal, {
+  type DrilldownColumn,
+  type DrilldownRow,
+} from '../components/dashboard/DashboardDrilldownModal.vue'
 import OrientacaoStatusChart from '../components/dashboard/OrientacaoStatusChart.vue'
 import QualisSummaryPanel from '../components/dashboard/QualisSummaryPanel.vue'
 import SerieChart from '../components/dashboard/SerieChart.vue'
 import { useDashboardStore } from '../stores/dashboard'
-import type { TipoSerie } from '../types/dashboard'
+import type {
+  ArticleFilters,
+  OrientationFilters,
+  OrientationStatus,
+  StatusQualis,
+  TipoSerie,
+} from '../types/dashboard'
 
 const route = useRoute()
 const store = useDashboardStore()
+const activeDrilldown = ref<'articles' | 'orientations' | null>(null)
 
 const seriesOptions: Array<{
   value: TipoSerie
@@ -166,32 +188,32 @@ const seriesOptions: Array<{
   {
     value: 'artigos',
     label: 'Artigos publicados em periódicos',
-    description: 'Produção bibliográfica em periódicos agrupada por ano.',
+    description: 'Clique em um ano para auditar as publicações em periódicos.',
   },
   {
     value: 'trabalhos_eventos',
     label: 'Trabalhos em eventos',
-    description: 'Publicações em anais de eventos agrupadas por ano.',
+    description: 'Trabalhos completos publicados em anais.',
   },
   {
     value: 'orientacoes',
     label: 'Orientações',
-    description: 'Orientações concluídas e em andamento identificadas no currículo.',
+    description: 'Orientações concluídas e em andamento por ano.',
   },
   {
     value: 'projetos',
     label: 'Projetos',
-    description: 'Projetos vinculados ao pesquisador ao longo do tempo.',
+    description: 'Projetos desenvolvidos ao longo dos anos.',
   },
   {
     value: 'bancas',
     label: 'Participações em bancas',
-    description: 'Distribuição das participações em bancas acadêmicas por tipo.',
+    description: 'Participações distribuídas por tipo de banca.',
   },
   {
     value: 'producoes_tecnicas',
     label: 'Produções técnicas',
-    description: 'Produções técnicas consolidadas pelo parser atual.',
+    description: 'Softwares, produtos e outras produções técnicas.',
   },
 ]
 
@@ -241,14 +263,189 @@ const summaryCards = computed(() => {
   }
 
   return [
-    { label: 'Artigos', value: resumo.totalArtigos, meta: 'Produção bibliográfica indexada no parser atual.' },
-    { label: 'Orientações', value: resumo.totalOrientacoes, meta: `${resumo.totalOrientacoesConcluidas} concluídas / ${resumo.totalOrientacoesEmAndamento} em andamento` },
-    { label: 'Projetos', value: resumo.totalProjetos, meta: 'Projetos vinculados ao currículo sincronizado.' },
-    { label: 'Bancas', value: resumo.totalBancas, meta: 'Participações em bancas extraídas.' },
-    { label: 'Prod. técnicas', value: resumo.totalProducoesTecnicas, meta: 'Categorias técnicas consolidadas.' },
-    { label: 'Trab. eventos', value: resumo.totalTrabalhosEventos, meta: 'Trabalhos completos em anais.' },
+    { key: 'orientacoes', label: 'Orientações', value: resumo.totalOrientacoes, meta: `${resumo.totalOrientacoesConcluidas} concluídas / ${resumo.totalOrientacoesEmAndamento} em andamento` },
+    { key: 'projetos', label: 'Projetos', value: resumo.totalProjetos, meta: 'Pesquisa, extensão e desenvolvimento.' },
+    { key: 'bancas', label: 'Bancas', value: resumo.totalBancas, meta: 'Participações registradas.' },
+    { key: 'producoes_tecnicas', label: 'Prod. técnicas', value: resumo.totalProducoesTecnicas, meta: 'Softwares, produtos e outros.' },
   ]
 })
+
+const drilldownTitle = computed(() => activeDrilldown.value === 'orientations'
+  ? orientationDrilldownTitle()
+  : articleDrilldownTitle())
+
+const drilldownSubtitle = computed(() => activeDrilldown.value === 'orientations'
+  ? 'Orientações já persistidas no LattesVision. Nenhuma nova coleta é realizada nesta consulta.'
+  : 'Artigos já persistidos no LattesVision. Nenhuma nova coleta é realizada nesta consulta.')
+
+const drilldownColumns = computed<DrilldownColumn[]>(() => activeDrilldown.value === 'orientations'
+  ? [
+      { key: 'year', label: 'Ano' },
+      { key: 'orientedName', label: 'Orientado(a)' },
+      { key: 'workTitle', label: 'Título' },
+      { key: 'type', label: 'Tipo' },
+      { key: 'status', label: 'Status' },
+    ]
+  : [
+      { key: 'year', label: 'Ano' },
+      { key: 'title', label: 'Título' },
+      { key: 'journal', label: 'Periódico' },
+      { key: 'issn', label: 'ISSN' },
+      { key: 'qualisStratum', label: 'Qualis' },
+      { key: 'qualisStatus', label: 'Cobertura' },
+    ])
+
+const drilldownRows = computed<DrilldownRow[]>(() => {
+  if (activeDrilldown.value === 'orientations') {
+    return (store.orientationPage?.items ?? []).map((orientation, index) => ({
+      id: orientation.id ?? `orientation-${orientation.workTitle}-${index}`,
+      cells: {
+        year: String(orientation.year ?? '—'),
+        orientedName: orientation.orientedName ?? 'Não identificado',
+        workTitle: orientation.workTitle ?? 'Título não identificado',
+        type: orientation.type ?? '—',
+        status: orientationStatusLabel(orientation.status),
+      },
+    }))
+  }
+
+  return (store.articlePage?.items ?? []).map((article, index) => ({
+    id: article.id ?? `article-${article.title}-${index}`,
+    cells: {
+      year: String(article.year ?? '—'),
+      title: article.title ?? 'Título não identificado',
+      journal: article.journal ?? 'Periódico não identificado',
+      issn: article.issn ?? '—',
+      qualisStratum: article.qualisStratum ?? '—',
+      qualisStatus: qualisStatusLabel(article.qualisStatus),
+    },
+  }))
+})
+
+const drilldownPage = computed(() => activeDrilldown.value === 'orientations'
+  ? store.orientationPage
+  : store.articlePage)
+
+const drilldownLoading = computed(() => activeDrilldown.value === 'orientations'
+  ? store.loadingOrientations
+  : store.loadingArticles)
+
+const drilldownError = computed(() => activeDrilldown.value === 'orientations'
+  ? store.errorOrientations
+  : store.errorArticles)
+
+const drilldownLoadingMessage = computed(() => activeDrilldown.value === 'orientations'
+  ? 'Carregando orientações...'
+  : 'Carregando artigos...')
+
+const drilldownEmptyMessage = computed(() => activeDrilldown.value === 'orientations'
+  ? 'Nenhuma orientação foi encontrada para este recorte.'
+  : 'Nenhum artigo foi encontrado para este recorte.')
+
+const drilldownTotalLabel = computed(() => activeDrilldown.value === 'orientations' ? 'orientação' : 'artigo')
+
+const drilldownTotalLabelPlural = computed(() => activeDrilldown.value === 'orientations' ? 'orientações' : 'artigos')
+
+function openSummaryCard(key: string) {
+  if (key === 'artigos') {
+    openArticleDetails()
+  }
+  if (key === 'orientacoes') {
+    openOrientationDetails()
+  }
+}
+
+function isDrilldownCard(key: string) {
+  return key === 'artigos' || key === 'orientacoes'
+}
+
+async function openArticleDetails(filters: ArticleFilters = {}) {
+  if (!currentResumo.value) {
+    return
+  }
+
+  activeDrilldown.value = 'articles'
+  await store.loadArticleDetails(currentId.value, filters)
+}
+
+async function openOrientationDetails(filters: OrientationFilters = {}) {
+  if (!currentResumo.value) {
+    return
+  }
+
+  activeDrilldown.value = 'orientations'
+  await store.loadOrientationDetails(currentId.value, filters)
+}
+
+function closeDrilldown() {
+  activeDrilldown.value = null
+  store.clearArticleDetails()
+  store.clearOrientationDetails()
+}
+
+async function changeDrilldownPage(page: number) {
+  if (activeDrilldown.value === 'orientations') {
+    await store.loadOrientationDetails(currentId.value, store.orientationFilters, page)
+    return
+  }
+
+  if (activeDrilldown.value === 'articles') {
+    await store.loadArticleDetails(currentId.value, store.articleFilters, page)
+  }
+}
+
+function articleDrilldownTitle() {
+  const filters = store.articleFilters
+  const parts = ['Artigos em periódicos']
+
+  if (filters.ano != null) {
+    parts.push(String(filters.ano))
+  }
+  if (filters.estrato) {
+    parts.push(`Qualis ${filters.estrato}`)
+  }
+  if (filters.statusQualis) {
+    parts.push(qualisStatusLabel(filters.statusQualis))
+  }
+
+  return parts.join(' · ')
+}
+
+function orientationDrilldownTitle() {
+  const filters = store.orientationFilters
+  const parts = ['Orientações']
+
+  if (filters.ano != null) {
+    parts.push(String(filters.ano))
+  }
+  if (filters.status) {
+    parts.push(orientationStatusLabel(filters.status))
+  }
+  if (filters.tipo) {
+    parts.push(filters.tipo)
+  }
+
+  return parts.join(' · ')
+}
+
+function qualisStatusLabel(status: StatusQualis | null) {
+  const labels: Record<StatusQualis, string> = {
+    CLASSIFICADO: 'Classificados',
+    SEM_ISSN: 'Sem ISSN',
+    NAO_CLASSIFICADO: 'Não localizados',
+  }
+  return status ? labels[status] : 'Não informado'
+}
+
+function orientationStatusLabel(status: OrientationStatus | null) {
+  if (status === 'CONCLUIDA') {
+    return 'Concluídas'
+  }
+  if (status === 'EM_ANDAMENTO') {
+    return 'Em andamento'
+  }
+  return 'Não informado'
+}
 
 function formatDate(value: string | null) {
   if (!value) {
@@ -289,6 +486,7 @@ async function loadPage() {
 watch(
   () => currentId.value,
   async () => {
+    activeDrilldown.value = null
     await loadPage()
   },
   { immediate: true },

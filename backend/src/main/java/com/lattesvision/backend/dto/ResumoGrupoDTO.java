@@ -37,6 +37,15 @@ public class ResumoGrupoDTO {
     @Schema(description = "Total agregado de trabalhos em eventos", example = "42")
     private long totalTrabalhosEventos;
 
+    @Schema(description = "Total agregado de livros", example = "8")
+    private long totalLivros;
+
+    @Schema(description = "Total agregado de capitulos de livros", example = "14")
+    private long totalCapitulos;
+
+    @Schema(description = "Total agregado de itens de producao bibliografica", example = "112")
+    private long totalProducaoBibliografica;
+
     public long getTotalPesquisadores() {
         return totalPesquisadores;
     }
@@ -115,5 +124,29 @@ public class ResumoGrupoDTO {
 
     public void setTotalTrabalhosEventos(long totalTrabalhosEventos) {
         this.totalTrabalhosEventos = totalTrabalhosEventos;
+    }
+
+    public long getTotalLivros() {
+        return totalLivros;
+    }
+
+    public void setTotalLivros(long totalLivros) {
+        this.totalLivros = totalLivros;
+    }
+
+    public long getTotalCapitulos() {
+        return totalCapitulos;
+    }
+
+    public void setTotalCapitulos(long totalCapitulos) {
+        this.totalCapitulos = totalCapitulos;
+    }
+
+    public long getTotalProducaoBibliografica() {
+        return totalProducaoBibliografica;
+    }
+
+    public void setTotalProducaoBibliografica(long totalProducaoBibliografica) {
+        this.totalProducaoBibliografica = totalProducaoBibliografica;
     }
 }

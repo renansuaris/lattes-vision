@@ -15,7 +15,7 @@ const props = defineProps<{
 
 const chartRoot = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
-const chartFontFamily = 'Inter, "Segoe UI", SegoeUI, "Helvetica Neue", Helvetica, Arial, sans-serif'
+const chartFontFamily = 'Poppins, "Segoe UI", Arial, sans-serif'
 
 function formatCategoryLabel(categoria: string) {
   return categoria === 'Graduacao' ? 'Graduação' : categoria
@@ -32,19 +32,19 @@ function renderChart() {
 
   chart.setOption({
     animationDuration: 500,
-    color: ['#1976c9', '#f97316', '#16a34a', '#dc2626', '#7c3aed', '#0891b2', '#ca8a04', '#64748b'],
+    color: ['#29488d', '#6b82b0', '#5c8a62', '#b96565', '#7567a8', '#4f8d9b', '#b58a4a', '#73859f'],
     textStyle: {
       fontFamily: chartFontFamily,
-      color: '#1f2937',
+      color: '#343a40',
     },
     tooltip: {
       trigger: 'item',
       backgroundColor: '#ffffff',
-      borderColor: '#d8e3f0',
+      borderColor: '#dee2e6',
       borderWidth: 1,
       padding: 10,
       textStyle: {
-        color: '#1f2937',
+        color: '#343a40',
         fontFamily: chartFontFamily,
       },
       formatter: '{b}: <strong>{c}</strong> ({d}%)',
@@ -55,7 +55,7 @@ function renderChart() {
       top: 'middle',
       itemGap: 10,
       textStyle: {
-        color: '#1f2937',
+        color: '#343a40',
         fontFamily: chartFontFamily,
       },
     },
@@ -69,7 +69,7 @@ function renderChart() {
         itemStyle: {
           borderColor: '#ffffff',
           borderWidth: 2,
-          borderRadius: 4,
+          borderRadius: 2,
         },
         label: {
           show: false,

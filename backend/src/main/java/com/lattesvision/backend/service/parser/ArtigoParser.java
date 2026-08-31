@@ -8,6 +8,7 @@ import org.jsoup.select.Elements;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -21,15 +22,31 @@ public final class ArtigoParser {
     private static final Pattern PADRAO_ANO = Pattern.compile("\\b(19|20)\\d{2}\\b");
     private static final String SELETOR_ANO_ESTRUTURADO =
             "span.informacao-artigo[data-tipo-ordenacao=ano]";
+    private static final String CABECALHO_ARTIGOS_EM_PERIODICOS =
+            "artigos completos publicados em periodicos";
 
     private ArtigoParser() {
     }
 
     public static List<Artigo> parse(Document doc) {
         List<Artigo> artigos = new ArrayList<>();
-        Elements elementosArtigos = doc.select("div.artigo-completo");
+        Elements elementos = doc.select(
+                "h1, h2, h3, div.inst_back, div.cita-artigos, div.artigo-completo"
+        );
+        boolean dentroDaSubsecaoArtigosEmPeriodicos = false;
 
-        for (Element elArtigo : elementosArtigos) {
+        for (Element elemento : elementos) {
+            if (isCabecalho(elemento)) {
+                dentroDaSubsecaoArtigosEmPeriodicos = CABECALHO_ARTIGOS_EM_PERIODICOS
+                        .equals(normalizarCabecalho(elemento.text()));
+                continue;
+            }
+
+            if (!dentroDaSubsecaoArtigosEmPeriodicos || !elemento.hasClass("artigo-completo")) {
+                continue;
+            }
+
+            Element elArtigo = elemento;
             String textoBruto = elArtigo.text();
             String citacaoLimpada = extrairCitacao(elArtigo);
             Map<String, String> dadosEstruturados = extrairDadosEstruturados(elArtigo);
@@ -47,6 +64,21 @@ public final class ArtigoParser {
         }
 
         return artigos;
+    }
+
+    private static boolean isCabecalho(Element elemento) {
+        String tagName = elemento.tagName().toLowerCase(Locale.ROOT);
+        return tagName.matches("h[1-3]")
+                || elemento.hasClass("inst_back")
+                || elemento.hasClass("cita-artigos");
+    }
+
+    private static String normalizarCabecalho(String texto) {
+        String semAcentos = Normalizer.normalize(texto == null ? "" : texto, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "");
+        return semAcentos.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", " ")
+                .trim();
     }
 
     private static Map<String, String> extrairDadosEstruturados(Element artigo) {

@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 
 import {
+  fetchArticles,
+  fetchOrientations,
   fetchBancasPorTipo,
   fetchOrientacoesPorStatusAno,
   fetchResumoQualis,
@@ -12,6 +14,10 @@ import {
   loadResumoPesquisador,
 } from '../services/dashboard.service'
 import type {
+  ArticleFilters,
+  ArticlePage,
+  OrientationFilters,
+  OrientationPage,
   RankingPesquisadorItem,
   CategoriaQuantidadeItem,
   ResumoGrupo,
@@ -38,13 +44,21 @@ interface DashboardState {
   orientacoesPorStatusAno: SerieOrientacaoStatusItem[]
   resumoQualis: ResumoQualis | null
   resumoQualisGrupo: ResumoQualis | null
+  articlePage: ArticlePage | null
+  articleFilters: ArticleFilters
+  orientationPage: OrientationPage | null
+  orientationFilters: OrientationFilters
   serieTipo: TipoSerie
   loadingResumo: boolean
   loadingSerie: boolean
   loadingRanking: boolean
+  loadingArticles: boolean
+  loadingOrientations: boolean
   errorResumo: string | null
   errorSerie: string | null
   errorRanking: string | null
+  errorArticles: string | null
+  errorOrientations: string | null
 }
 
 export const useDashboardStore = defineStore('dashboard', {
@@ -62,13 +76,21 @@ export const useDashboardStore = defineStore('dashboard', {
     orientacoesPorStatusAno: [],
     resumoQualis: null,
     resumoQualisGrupo: null,
+    articlePage: null,
+    articleFilters: {},
+    orientationPage: null,
+    orientationFilters: {},
     serieTipo: 'artigos',
     loadingResumo: false,
     loadingSerie: false,
     loadingRanking: false,
+    loadingArticles: false,
+    loadingOrientations: false,
     errorResumo: null,
     errorSerie: null,
     errorRanking: null,
+    errorArticles: null,
+    errorOrientations: null,
   }),
   actions: {
     async loadResumo(idLattes: string) {
@@ -83,6 +105,8 @@ export const useDashboardStore = defineStore('dashboard', {
       this.orientacoesPorStatusAno = []
       this.resumoQualis = null
       this.resumoQualisGrupo = null
+      this.clearArticleDetails()
+      this.clearOrientationDetails()
 
       try {
         this.resumo = await loadResumoPesquisador(idLattes)
@@ -117,6 +141,8 @@ export const useDashboardStore = defineStore('dashboard', {
       this.orientacoesPorStatusAno = []
       this.resumoQualis = null
       this.resumoQualisGrupo = null
+      this.clearArticleDetails()
+      this.clearOrientationDetails()
 
       try {
         const temporalTipos = tipos.filter((tipo) => tipo !== 'bancas' && tipo !== 'orientacoes')
@@ -164,6 +190,8 @@ export const useDashboardStore = defineStore('dashboard', {
       this.orientacoesPorStatusAno = []
       this.resumoQualis = null
       this.resumoQualisGrupo = null
+      this.clearArticleDetails()
+      this.clearOrientationDetails()
 
       try {
         this.resumoGrupo = await loadResumoGrupoAdhoc(idsLattes)
@@ -208,6 +236,46 @@ export const useDashboardStore = defineStore('dashboard', {
         this.loadingRanking = false
       }
     },
+    async loadArticleDetails(idLattes: string, filters: ArticleFilters = {}, page = 0) {
+      this.loadingArticles = true
+      this.errorArticles = null
+      this.articleFilters = { ...filters }
+
+      try {
+        this.articlePage = await fetchArticles(idLattes, filters, page)
+      } catch (error) {
+        this.articlePage = null
+        this.errorArticles = error instanceof Error ? error.message : 'Falha ao carregar artigos.'
+      } finally {
+        this.loadingArticles = false
+      }
+    },
+    clearArticleDetails() {
+      this.articlePage = null
+      this.articleFilters = {}
+      this.loadingArticles = false
+      this.errorArticles = null
+    },
+    async loadOrientationDetails(idLattes: string, filters: OrientationFilters = {}, page = 0) {
+      this.loadingOrientations = true
+      this.errorOrientations = null
+      this.orientationFilters = { ...filters }
+
+      try {
+        this.orientationPage = await fetchOrientations(idLattes, filters, page)
+      } catch (error) {
+        this.orientationPage = null
+        this.errorOrientations = error instanceof Error ? error.message : 'Falha ao carregar orientações.'
+      } finally {
+        this.loadingOrientations = false
+      }
+    },
+    clearOrientationDetails() {
+      this.orientationPage = null
+      this.orientationFilters = {}
+      this.loadingOrientations = false
+      this.errorOrientations = null
+    },
     reset() {
       this.currentResumoId = null
       this.grupoIds = []
@@ -222,12 +290,18 @@ export const useDashboardStore = defineStore('dashboard', {
       this.orientacoesPorStatusAno = []
       this.resumoQualis = null
       this.resumoQualisGrupo = null
+      this.clearArticleDetails()
+      this.clearOrientationDetails()
       this.errorResumo = null
       this.errorSerie = null
       this.errorRanking = null
+      this.errorArticles = null
+      this.errorOrientations = null
       this.loadingResumo = false
       this.loadingSerie = false
       this.loadingRanking = false
+      this.loadingArticles = false
+      this.loadingOrientations = false
       this.serieTipo = 'artigos'
     },
   },

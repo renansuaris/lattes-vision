@@ -11,6 +11,9 @@ export interface ResumoPesquisador {
   totalBancas: number
   totalProducoesTecnicas: number
   totalTrabalhosEventos: number
+  totalLivros: number
+  totalCapitulos: number
+  totalProducaoBibliografica: number
 }
 
 export interface ResumoGrupo {
@@ -24,6 +27,9 @@ export interface ResumoGrupo {
   totalBancas: number
   totalProducoesTecnicas: number
   totalTrabalhosEventos: number
+  totalLivros: number
+  totalCapitulos: number
+  totalProducaoBibliografica: number
 }
 
 export interface SerieGrupoItem {
@@ -53,6 +59,57 @@ export interface SerieOrientacaoStatusItem {
 }
 
 export type EstratoQualis = 'A1' | 'A2' | 'A3' | 'A4' | 'B1' | 'B2' | 'B3' | 'B4' | 'C'
+
+export type StatusQualis = 'CLASSIFICADO' | 'SEM_ISSN' | 'NAO_CLASSIFICADO'
+
+export interface ArticleFilters {
+  ano?: number
+  estrato?: EstratoQualis
+  statusQualis?: StatusQualis
+}
+
+export interface ArticleDetail {
+  id: number | null
+  year: number | null
+  title: string | null
+  journal: string | null
+  issn: string | null
+  qualisStratum: EstratoQualis | null
+  qualisStatus: StatusQualis | null
+}
+
+export interface ArticlePage {
+  items: ArticleDetail[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+export type OrientationStatus = 'CONCLUIDA' | 'EM_ANDAMENTO'
+
+export interface OrientationFilters {
+  ano?: number
+  status?: OrientationStatus
+  tipo?: string
+}
+
+export interface OrientationDetail {
+  id: number | null
+  year: number | null
+  orientedName: string | null
+  workTitle: string | null
+  type: string | null
+  status: OrientationStatus | null
+}
+
+export interface OrientationPage {
+  items: OrientationDetail[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
 
 export interface CoberturaQualis {
   totalArtigos: number

@@ -1139,3 +1139,169 @@ Campos minimos sugeridos para MVP:
 2. Depois, adicionar comparacao Qualis separada por pesquisador no grupo, alem da consolidacao ja existente.
 3. Em seguida, tornar os filtros de periodo funcionais e aplica-los de forma consistente aos cards e graficos.
 4. Avaliar exportacao dos resultados com titulo, periodico, ISSN, estrato, ciclo, fonte e status de cobertura.
+
+## Direcao Visual Institucional (2026-08-12)
+
+### Referencia e limites
+- O arquivo `backend/src/main/resources/pagina.html`, referente ao Moodle UFC Quixada, foi analisado exclusivamente como referencia visual.
+- Nenhuma estrutura tecnica, dependencia ou marcacao do Moodle foi incorporada.
+- Vue 3, Vue Router, Pinia, ECharts e a organizacao atual do frontend foram preservados.
+
+### Padroes globais adotados
+- Tipografia principal: Poppins, base de 15 px e pesos 400, 500 e 600 na maior parte da interface.
+- Paleta institucional vigente baseada em azul `#29488d`, hover/escuro `#213c78`, azul secundario `#6b82b0`, fundo `#f5f6f8`, superficies brancas, texto `#343a40` e bordas `#dee2e6`.
+- Largura principal de conteudo: 1140 px, com margens laterais responsivas.
+- Espacamento baseado em multiplos de 4 px, com paineis normalmente usando 16 ou 20 px.
+- Border radius reduzido para 0 a 3 px; pills devem ser evitadas quando nao representam uma necessidade semantica real.
+- Sombras restritas ao header e a dialogos, sempre discretas. Paineis e secoes sao definidos principalmente por bordas.
+- Botoes e campos compactos, com aproximadamente 38 px de altura, cantos quase retos e foco azul visivel.
+- Titulos de pagina devem permanecer entre aproximadamente 24 e 32 px, sem linguagem de hero ou landing page.
+
+### Aplicacao no frontend
+- Header redesenhado como navbar institucional compacta, com secao ativa e navegacao funcional.
+- Home convertida em formulario administrativo compacto e alinhado a esquerda dentro do seu container.
+- Cards de resumo passaram a formar blocos continuos com divisorias, reduzindo a sensacao de cards soltos.
+- Graficos do dashboard passaram a ser secoes internas separadas por linhas, sem cards aninhados.
+- Metricas e estratos Qualis foram organizados em grades compactas; badges arredondadas e gradiente de cobertura foram removidos.
+- Lista de pesquisadores e metadados passaram a usar aparencia tabular, mais densa.
+- Componentes ECharts foram alinhados a Poppins e a nova paleta institucional.
+- Rodape identifica o LattesVision e a UFC Campus Quixada.
+
+### Ajustes finais da interface
+- A nova marca `frontend/src/assets/logo-lattesvision-atualizada.png` passou a ser usada no header.
+- O titulo da aba foi definido como `LattesVision` e o favicon passou a usar somente o simbolo do olho em `frontend/src/assets/olho-lattesvision.png`.
+- O header manteve os itens `Consulta` e `Sobre`.
+- O resumo do grupo passou a exibir seis indicadores em grade 3 x 2; o card redundante de quantidade de pesquisadores foi removido, pois essa informacao ja aparece no cabecalho.
+- O selo visual com a fonte `CAPES/SUCUPIRA` foi removido dos paineis Qualis individual e de grupo; a metodologia continua descrita no texto do painel.
+- O campo de IDs da home teve o redimensionamento manual desativado e agora cresce automaticamente conforme o conteudo, partindo de uma altura compacta de 58 px.
+- O spinner de consulta foi preservado mesmo quando o navegador usa `prefers-reduced-motion`; apenas transicoes decorativas sao reduzidas.
+- A nova paleta tambem foi aplicada aos componentes ECharts de series, ranking, Qualis, orientacoes e bancas.
+
+### Validacao
+- `npm run build` passou em `frontend/`.
+- A home foi validada visualmente em Chromium headless nas dimensoes 1440 x 1000.
+- O aviso conhecido de bundle grande do ECharts permanece sem impedir o build.
+
+### Nota de modelagem UML
+- Foi iniciada a revisao do diagrama de casos de uso do escopo funcional.
+- Direcao discutida: `Realizar analise` como caso geral abstrato, especializado por analise individual e analise de grupo; funcionalidades comuns ficam relacionadas ao caso geral, enquanto ranking e consulta de membros permanecem especificos do grupo.
+- `Plataforma Lattes` deve ser representada como ator externo associado ao caso `Coletar dados curriculares`, que permanece dentro da fronteira do LattesVision.
+- Filtros e exportacao permanecem previstos no escopo funcional, embora ainda sejam incrementos futuros no codigo.
+
+## Diagnostico de Contagem de Artigos e Proxima Prioridade (2026-08-12)
+
+### Divergencia confirmada
+- Para o pesquisador Emanuel Ferreira Coutinho (`9359546788802277`), o Lattes informa 63 artigos publicados em periodicos, mas o LattesVision persistiu 65.
+- Os dois registros indevidos identificados foram:
+  - `Sistema Xnes - Aplicacao do Carteiro Rural` (1999);
+  - `Reconhecimento de Assinaturas com Redes Neurais` (1998).
+- Esses registros pertencem a subsecoes de resumos publicados em anais de congressos, nao a artigos completos em periodicos.
+
+### Causa raiz
+- `ArtigoParser` usa atualmente o seletor global `doc.select("div.artigo-completo")`.
+- O HTML do Lattes reutiliza a classe `artigo-completo` em diferentes subsecoes da producao bibliografica, inclusive `Resumos publicados em anais de congressos (artigos)`.
+- Os resumos tambem podem possuir `cvuri` com titulo, nome de publicacao e ISSN; portanto, filtrar por ISSN, Qualis, ano ou nome do periodico nao e uma solucao segura.
+- PostgreSQL, dashboard e Qualis apenas refletem os objetos recebidos; a falha esta na delimitacao da secao durante o parsing.
+
+### Correcao prioritaria para a proxima sessao
+1. Alterar `ArtigoParser` para iniciar a captura somente ao encontrar o cabecalho exato `Artigos completos publicados em periodicos`.
+2. Interromper a captura ao encontrar o proximo cabecalho de subsecao (`div.cita-artigos` ou equivalente).
+3. Adicionar fixture/teste contendo um artigo legitimo e um `div.artigo-completo` distrator sob `Resumos publicados em anais de congressos`, exigindo que somente o artigo seja retornado.
+4. Auditar os demais parsers quanto a vazamentos entre subsecoes, reaproveitando a estrategia de delimitacao ja existente em `TrabalhoEventoParser`.
+5. Executar a suite do backend e sincronizar novamente o pesquisador pelo endpoint explicito `POST /api/lattes/sincronizar/9359546788802277`, pois `/carregar` reutiliza registros existentes.
+6. Confirmar que o total persistido e exibido passa de 65 para 63.
+
+### Ampliacao futura da producao bibliografica
+- O LattesVision ainda nao coleta livros nem capitulos de livros; ambos sao relevantes para analise institucional e para representar areas em que essa producao possui maior peso.
+- Proxima feature apos a correcao/auditoria dos parsers: criar entidades e parsers separados `Livro` e `CapituloLivro`, vinculados a `Pesquisador`.
+- Campos candidatos para `Livro`: titulo, autores, ano, editora, ISBN, edicao, volume, cidade e descricao bruta.
+- Campos candidatos para `CapituloLivro`: titulo do capitulo, titulo do livro, autores, organizadores, ano, editora, ISBN, paginas e descricao bruta.
+- Os parsers devem respeitar exatamente as subsecoes `Livros publicados/organizados ou edicoes` e `Capitulos de livros publicados`, encerrando a captura no cabecalho seguinte.
+- No dashboard, manter livros e capitulos separados no backend, mas considerar um indicador visual unico `Livros e capitulos`, com subtotais e serie anual por tipo.
+- Qualis Periodicos deve continuar exclusivo de artigos em periodicos; nao aplicar essa classificacao a livros, capitulos ou trabalhos em eventos.
+
+## Fechamento da Sessao — Parser, Interface e Drill-down (2026-08-27)
+
+### Correcao e auditoria dos parsers concluida
+- A prioridade registrada na secao anterior foi executada: `ArtigoParser` agora inicia a captura apenas no cabecalho normalizado exato `Artigos completos publicados em periodicos` e encerra ao encontrar qualquer novo cabecalho de subseção.
+- Isso eliminou o vazamento de resumos publicados em anais que reutilizavam a classe HTML `artigo-completo`.
+- Para Emanuel Ferreira Coutinho (`9359546788802277`), a base persistida passou a refletir os 63 artigos em periodicos esperados, em vez dos 65 que incluíam dois registros indevidos.
+- Foram adicionados testes de regressao para o limite da secao de artigos e testes de fronteira para os demais parsers relevantes.
+- `OrientacaoParser` e `ProjetoParser` foram ajustados para respeitar tambem os delimitadores `div.inst_back`; parsers de banca e producao tecnica receberam cobertura para impedir vazamentos entre subsecoes.
+- Ha um novo teste de `TrabalhoEventoParser` ainda nao adicionado ao Git, juntamente com os demais arquivos nao rastreados da sessao.
+
+### Ajustes visuais realizados
+- A pasta `diagramas/` foi analisada como prototipo conceitual do LattesVision.
+- As imagens `grafico-crescimento.png` e `grafico-pizza.png` foram incorporadas ao frontend como elementos visuais estaticos da tela inicial, seguindo a disposicao definida no prototipo.
+- O rodape da home foi simplificado para um copyright centralizado, como no prototipo.
+- Esses graficos da home sao decorativos; os graficos interativos do dashboard continuam usando ECharts e dados da API.
+
+### Drill-down de artigos concluido
+- Foi criado `GET /api/dashboard/pesquisadores/{id}/artigos`.
+- O endpoint consulta somente artigos ja persistidos e aceita filtros opcionais `ano`, `estrato`, `statusQualis`, alem de `page` e `size`; ele nunca dispara uma nova coleta Lattes.
+- O retorno pagina os itens com ano, titulo, periodico, ISSN, estrato Qualis e status de cobertura.
+- No dashboard individual, abrem a auditoria de artigos:
+  - o card `Artigos`;
+  - um ano da serie temporal de artigos;
+  - metricas, distribuicao e serie temporal do painel Qualis.
+- O modal explica que os dados sao persistidos, exibe estados de carregamento/erro/vazio e possui paginacao.
+- Clicar em uma metrica Qualis com total zero nao abre mais um modal vazio por engano.
+
+### Drill-down de orientacoes concluido
+- Foi criado `GET /api/dashboard/pesquisadores/{id}/orientacoes`.
+- Filtros aceitos: `ano`, `status` (`CONCLUIDA` ou `EM_ANDAMENTO`), `tipo`, `page` e `size`.
+- A consulta usa `Specification` dinamica para nao gerar erro quando `tipo` esta ausente; a ordenacao foi mantida compativel com consultas Criteria do Spring Data.
+- O retorno paginado inclui ano, orientado(a), titulo do trabalho, tipo e status.
+- No dashboard individual:
+  - o card `Orientações` abre a lista completa;
+  - clicar em uma barra de `Orientações` abre o recorte correspondente de ano e status;
+  - o mesmo modal generico de auditoria e reutilizado para artigos e orientacoes, inclusive na paginacao.
+- Validacao contra PostgreSQL local para Emanuel:
+  - consulta geral: 112 orientacoes, com paginação correta;
+  - recorte `ano=2026&status=EM_ANDAMENTO`: 16 orientacoes, com itens retornados corretamente.
+
+### Componentes principais alterados
+- Backend: `DashboardController`, `DashboardService`, `ArtigoRepository` e o novo `OrientacaoRepository`.
+- Novos contratos: `ArticleDetailDTO`, `ArticlePageDTO`, `OrientationDetailDTO` e `OrientationPageDTO`.
+- Frontend: `DashboardDrilldownModal.vue`, `PesquisadorView.vue`, `OrientacaoStatusChart.vue`, `SerieChart.vue`, `QualisSummaryPanel.vue`, store e service do dashboard, e tipos em `frontend/src/types/dashboard.ts`.
+
+### Validacao da sessao
+- `mvn -q -DskipTests test` e `mvn -q -DskipTests package` passaram no backend.
+- `npm run build` passou no frontend.
+- `git diff --check` passou.
+- A API nova de orientacoes foi iniciada temporariamente na porta 8081 e validada contra o PostgreSQL local.
+- A suite completa de testes Maven permanece impedida neste ambiente por Java 25/Mockito-ByteBuddy (anexacao dinamica de agente); os testes e a compilacao foram preservados, mas a proxima sessao pode executar a suite completa com JDK 17, que e o alvo do projeto.
+
+### Como retomar
+1. Reiniciar o backend no IntelliJ antes de testar, para ele carregar os novos endpoints de artigos e orientacoes.
+2. Testar manualmente no dashboard individual o card e os graficos de artigos/orientacoes, inclusive a paginacao.
+3. Proximo incremento recomendado: drill-down de `Bancas` — clicar em uma fatia do grafico por tipo e listar as participacoes. Ele reaproveita o modal generico e confirma a abordagem para categorias nao temporais.
+4. Depois: drill-down de `Projetos`, seguido de `Trabalhos em eventos` e `Producoes tecnicas`.
+5. Quando os drill-downs essenciais estiverem consolidados, implementar filtros globais reais de periodo e tipo de producao, consistentes em cards e graficos.
+6. Itens maiores ainda pendentes: comparacao Qualis por pesquisador no grupo, livros/capitulos, grupos persistidos/nomeados, exportacao e refinamento da documentacao OpenAPI/configuracao por variaveis de ambiente.
+
+## Producao Bibliografica: Livros e Capitulos (2026-08-31)
+
+### Decisao de produto
+- Livros e capitulos passaram a compor a secao discreta `Producao bibliografica`; eles nao receberam card principal, grafico ou drill-down exclusivo.
+- A composicao exibida e: artigos em periodicos, trabalhos completos em eventos, livros e capitulos.
+- Artigos permanecem em destaque nos graficos e no painel Qualis. Qualis Periodicos nao se aplica a livros ou capitulos.
+
+### Implementacao
+- Criadas as entidades `Livro` e `CapituloLivro`, associadas a `Pesquisador` com cascade e orphan removal.
+- `LivroParser` e `CapituloLivroParser` leem exclusivamente as subsecoes correspondentes do Lattes e interrompem a captura ao encontrar qualquer cabecalho subsequente.
+- Os campos extraidos incluem autores, titulo, ano, editora, ISBN, edicao, volume, paginas e descricao bruta; capitulos tambem preservam o titulo do livro de origem quando informado.
+- `ScraperService` passou a persistir os dois novos tipos em cada sincronizacao.
+- Os resumos individual e de grupo agora retornam `totalLivros`, `totalCapitulos` e `totalProducaoBibliografica`.
+- O painel compartilhado `BibliographicProductionPanel.vue` mostra a composicao nos dashboards individual e de grupo.
+
+### Validacao
+- `mvn -q -Dtest=LivroParserTest,CapituloLivroParserTest test` passou.
+- `mvn -q -DskipTests package` passou no backend.
+- Os testes de `DashboardServiceTest`, incluindo a nova agregacao de grupo, foram compilados mas nao puderam executar neste ambiente: o Mockito/ByteBuddy nao consegue anexar o agente no Java 25. Executa-los com JDK 17 continua sendo a validacao pendente.
+- `npm run build` passou no frontend; o aviso conhecido de bundle grande do ECharts permanece.
+
+### Ajuste final de interface
+- A faixa superior de indicadores principais passou a conter quatro colunas no desktop: `Orientacoes`, `Projetos`, `Bancas` e `Producoes tecnicas`.
+- Artigos e trabalhos em eventos permanecem apenas no painel de composicao `Producao bibliografica`, eliminando a quebra visual com espacos vazios abaixo dos cards.
+- Em tablet e celular, a grade continua responsiva em duas e uma coluna, respectivamente.

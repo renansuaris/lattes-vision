@@ -5,22 +5,22 @@
         <RouterLink class="brand" to="/">
           <img class="brand-logo" :src="logoUrl" alt="LattesVision" />
         </RouterLink>
-        <nav class="header-nav" aria-label="Navegacao principal">
-          <a href="#" @click.prevent>Inicio</a>
-          <a href="#" @click.prevent>Sobre</a>
+        <nav class="header-nav" aria-label="Navegação principal">
+          <RouterLink to="/">Consulta</RouterLink>
+          <a href="#app-footer">Sobre</a>
         </nav>
       </div>
     </header>
 
     <RouterView />
 
-    <footer class="app-footer">
-      <div class="app-footer__inner">LattesVision</div>
+    <footer id="app-footer" class="app-footer">
+      <div class="app-footer__inner">Copyright © LattesVision</div>
     </footer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
-import logoUrl from './assets/Lattes_VISION__1_-removebg-preview.png'
+import logoUrl from './assets/logo-lattesvision-atualizada.png'
 </script>

@@ -1,6 +1,8 @@
 package com.lattesvision.backend.controller;
 
 import com.lattesvision.backend.dto.ApiErrorResponse;
+import com.lattesvision.backend.dto.ArticlePageDTO;
+import com.lattesvision.backend.dto.OrientationPageDTO;
 import com.lattesvision.backend.dto.CategoriaQuantidadeDTO;
 import com.lattesvision.backend.dto.GrupoAdhocRequestDTO;
 import com.lattesvision.backend.dto.RankingPesquisadorDTO;
@@ -11,6 +13,8 @@ import com.lattesvision.backend.dto.SerieGrupoDTO;
 import com.lattesvision.backend.dto.SerieOrientacaoStatusDTO;
 import com.lattesvision.backend.dto.SerieTemporalDTO;
 import com.lattesvision.backend.service.DashboardService;
+import com.lattesvision.backend.model.EstratoQualis;
+import com.lattesvision.backend.model.StatusClassificacaoQualis;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -233,6 +237,97 @@ public class DashboardController {
     }
 
     @Operation(
+            summary = "Artigos paginados para auditoria do dashboard",
+            description = "Retorna artigos ja persistidos para um pesquisador, com filtros opcionais por ano, estrato e cobertura Qualis. Nao executa scraping."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Pagina de artigos encontrada com sucesso",
+                    content = @Content(schema = @Schema(implementation = ArticlePageDTO.class))
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "ID, filtros ou parametros de paginacao invalidos",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Pesquisador nao encontrado",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            )
+    })
+    @GetMapping("/pesquisadores/{id}/artigos")
+    public ResponseEntity<ArticlePageDTO> buscarArtigos(
+            @Parameter(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
+            @PathVariable String id,
+            @Parameter(description = "Ano de publicacao") @RequestParam(required = false) Integer ano,
+            @Parameter(description = "Estrato Qualis") @RequestParam(required = false) String estrato,
+            @Parameter(description = "Status da cobertura Qualis")
+            @RequestParam(required = false) String statusQualis,
+            @Parameter(description = "Pagina baseada em zero") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Quantidade de itens por pagina, entre 1 e 100")
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        validarIdLattes(id);
+        validarPaginacao(page, size);
+        return ResponseEntity.ok(dashboardService.buscarArtigos(
+                id,
+                ano,
+                converterEstrato(estrato),
+                converterStatusQualis(statusQualis),
+                page,
+                size
+        ));
+    }
+
+    @Operation(
+            summary = "Orientacoes paginadas para auditoria do dashboard",
+            description = "Retorna orientacoes ja persistidas para um pesquisador, com filtros opcionais por ano, status e tipo. Nao executa scraping."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Pagina de orientacoes encontrada com sucesso",
+                    content = @Content(schema = @Schema(implementation = OrientationPageDTO.class))
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "ID, filtros ou parametros de paginacao invalidos",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Pesquisador nao encontrado",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            )
+    })
+    @GetMapping("/pesquisadores/{id}/orientacoes")
+    public ResponseEntity<OrientationPageDTO> buscarOrientacoes(
+            @Parameter(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
+            @PathVariable String id,
+            @Parameter(description = "Ano da orientacao") @RequestParam(required = false) Integer ano,
+            @Parameter(description = "Status da orientacao: CONCLUIDA ou EM_ANDAMENTO")
+            @RequestParam(required = false) String status,
+            @Parameter(description = "Tipo da orientacao, por exemplo Mestrado ou Doutorado")
+            @RequestParam(required = false) String tipo,
+            @Parameter(description = "Pagina baseada em zero") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Quantidade de itens por pagina, entre 1 e 100")
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        validarIdLattes(id);
+        validarPaginacao(page, size);
+        return ResponseEntity.ok(dashboardService.buscarOrientacoes(
+                id,
+                ano,
+                converterStatusOrientacao(status),
+                tipo,
+                page,
+                size
+        ));
+    }
+
+    @Operation(
             summary = "Participacoes em bancas por tipo",
             description = "Retorna a quantidade de participacoes em bancas agrupada por tipo para graficos de distribuicao."
     )
@@ -325,6 +420,47 @@ public class DashboardController {
     private void validarIdLattes(String id) {
         if (id == null || !PADRAO_ID_LATTES.matcher(id).matches()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID Lattes invalido. Use exatamente 16 digitos numericos.");
+        }
+    }
+
+    private void validarPaginacao(int page, int size) {
+        if (page < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A pagina deve ser maior ou igual a zero.");
+        }
+        if (size < 1 || size > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O tamanho da pagina deve estar entre 1 e 100.");
+        }
+    }
+
+    private EstratoQualis converterEstrato(String estrato) {
+        return converterEnum(estrato, EstratoQualis.class, "estrato Qualis");
+    }
+
+    private StatusClassificacaoQualis converterStatusQualis(String statusQualis) {
+        return converterEnum(statusQualis, StatusClassificacaoQualis.class, "status Qualis");
+    }
+
+    private String converterStatusOrientacao(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+
+        String statusNormalizado = status.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!"CONCLUIDA".equals(statusNormalizado) && !"EM_ANDAMENTO".equals(statusNormalizado)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor invalido para status da orientacao.");
+        }
+        return statusNormalizado;
+    }
+
+    private <T extends Enum<T>> T converterEnum(String valor, Class<T> tipo, String nomeParametro) {
+        if (valor == null || valor.isBlank()) {
+            return null;
+        }
+
+        try {
+            return Enum.valueOf(tipo, valor.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor invalido para " + nomeParametro + ".");
         }
     }
 

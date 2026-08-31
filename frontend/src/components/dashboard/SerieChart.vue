@@ -12,13 +12,19 @@ const props = withDefaults(defineProps<{
   data: SerieTemporalItem[]
   label: string
   chartType?: 'bar' | 'line'
+  interactive?: boolean
 }>(), {
   chartType: 'bar',
+  interactive: false,
 })
+
+const emit = defineEmits<{
+  selectYear: [year: number]
+}>()
 
 const chartRoot = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
-const chartFontFamily = 'Inter, "Segoe UI", SegoeUI, "Helvetica Neue", Helvetica, Arial, sans-serif'
+const chartFontFamily = 'Poppins, "Segoe UI", Arial, sans-serif'
 
 function renderChart() {
   if (!chartRoot.value) {
@@ -39,13 +45,14 @@ function renderChart() {
         symbolSize: 8,
         lineStyle: {
           width: 3,
-          color: '#1976c9',
+          color: '#29488d',
         },
         itemStyle: {
-          color: '#1976c9',
+          color: '#29488d',
           borderColor: '#ffffff',
           borderWidth: 2,
         },
+        cursor: props.interactive ? 'pointer' : 'default',
       }
     : {
         name: props.label,
@@ -53,16 +60,17 @@ function renderChart() {
         data: values,
         barWidth: '42%',
         itemStyle: {
-          borderRadius: [6, 6, 0, 0],
-          color: '#1976c9',
+          borderRadius: [2, 2, 0, 0],
+          color: '#29488d',
         },
+        cursor: props.interactive ? 'pointer' : 'default',
       }
 
   chart.setOption({
     animationDuration: 500,
     textStyle: {
       fontFamily: chartFontFamily,
-      color: '#1f2937',
+      color: '#343a40',
     },
     grid: {
       top: 24,
@@ -73,11 +81,11 @@ function renderChart() {
     tooltip: {
       trigger: 'axis',
       backgroundColor: '#ffffff',
-      borderColor: '#d8e3f0',
+      borderColor: '#dee2e6',
       borderWidth: 1,
       padding: 10,
       textStyle: {
-        color: '#1f2937',
+        color: '#343a40',
         fontFamily: chartFontFamily,
       },
     },
@@ -86,11 +94,11 @@ function renderChart() {
       data: props.data.map((item) => item.ano),
       axisLine: {
         lineStyle: {
-          color: '#d8e3f0',
+          color: '#dee2e6',
         },
       },
       axisLabel: {
-        color: '#6b7280',
+        color: '#6c757d',
         fontFamily: chartFontFamily,
       },
     },
@@ -99,11 +107,11 @@ function renderChart() {
       minInterval: 1,
       splitLine: {
         lineStyle: {
-          color: '#e6eef7',
+          color: '#e9ecef',
         },
       },
       axisLabel: {
-        color: '#6b7280',
+        color: '#6c757d',
         fontFamily: chartFontFamily,
       },
     },
@@ -115,8 +123,20 @@ function resizeChart() {
   chart?.resize()
 }
 
+function handleChartClick(event: { dataIndex?: number }) {
+  if (!props.interactive || event.dataIndex == null) {
+    return
+  }
+
+  const item = props.data[event.dataIndex]
+  if (item) {
+    emit('selectYear', item.ano)
+  }
+}
+
 onMounted(() => {
   renderChart()
+  chart?.on('click', handleChartClick)
   window.addEventListener('resize', resizeChart)
 })
 

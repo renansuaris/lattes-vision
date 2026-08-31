@@ -1,6 +1,10 @@
 package com.lattesvision.backend.service;
 
 import com.lattesvision.backend.dto.CategoriaQuantidadeDTO;
+import com.lattesvision.backend.dto.ArticleDetailDTO;
+import com.lattesvision.backend.dto.ArticlePageDTO;
+import com.lattesvision.backend.dto.OrientationDetailDTO;
+import com.lattesvision.backend.dto.OrientationPageDTO;
 import com.lattesvision.backend.dto.ResumoPesquisadorDTO;
 import com.lattesvision.backend.dto.CoberturaQualisDTO;
 import com.lattesvision.backend.dto.EstratoQuantidadeDTO;
@@ -12,7 +16,13 @@ import com.lattesvision.backend.dto.SerieGrupoDTO;
 import com.lattesvision.backend.dto.SerieOrientacaoStatusDTO;
 import com.lattesvision.backend.dto.SerieQualisAnoDTO;
 import com.lattesvision.backend.model.*;
+import com.lattesvision.backend.repository.ArtigoRepository;
 import com.lattesvision.backend.repository.PesquisadorRepository;
+import com.lattesvision.backend.repository.OrientacaoRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -34,10 +44,19 @@ public class DashboardService {
     private static final String STATUS_EM_ANDAMENTO = "EM_ANDAMENTO";
 
     private final PesquisadorRepository pesquisadorRepository;
+    private final ArtigoRepository artigoRepository;
+    private final OrientacaoRepository orientacaoRepository;
     private final ScraperService scraperService;
 
-    public DashboardService(PesquisadorRepository pesquisadorRepository, ScraperService scraperService) {
+    public DashboardService(
+            PesquisadorRepository pesquisadorRepository,
+            ArtigoRepository artigoRepository,
+            OrientacaoRepository orientacaoRepository,
+            ScraperService scraperService
+    ) {
         this.pesquisadorRepository = pesquisadorRepository;
+        this.artigoRepository = artigoRepository;
+        this.orientacaoRepository = orientacaoRepository;
         this.scraperService = scraperService;
     }
 
@@ -67,6 +86,9 @@ public class DashboardService {
         resumo.setTotalBancas(somar(pesquisadores, ResumoPesquisadorDTO::getTotalBancas));
         resumo.setTotalProducoesTecnicas(somar(pesquisadores, ResumoPesquisadorDTO::getTotalProducoesTecnicas));
         resumo.setTotalTrabalhosEventos(somar(pesquisadores, ResumoPesquisadorDTO::getTotalTrabalhosEventos));
+        resumo.setTotalLivros(somar(pesquisadores, ResumoPesquisadorDTO::getTotalLivros));
+        resumo.setTotalCapitulos(somar(pesquisadores, ResumoPesquisadorDTO::getTotalCapitulos));
+        resumo.setTotalProducaoBibliografica(somar(pesquisadores, ResumoPesquisadorDTO::getTotalProducaoBibliografica));
         return resumo;
     }
 
@@ -128,6 +150,14 @@ public class DashboardService {
         resumo.setTotalBancas(pesquisador.getBancas().size());
         resumo.setTotalProducoesTecnicas(pesquisador.getProducoesTecnicas().size());
         resumo.setTotalTrabalhosEventos(pesquisador.getTrabalhosEventos().size());
+        resumo.setTotalLivros(pesquisador.getLivros().size());
+        resumo.setTotalCapitulos(pesquisador.getCapitulosLivros().size());
+        resumo.setTotalProducaoBibliografica(
+                resumo.getTotalArtigos()
+                        + resumo.getTotalTrabalhosEventos()
+                        + resumo.getTotalLivros()
+                        + resumo.getTotalCapitulos()
+        );
         return resumo;
     }
 
@@ -175,6 +205,90 @@ public class DashboardService {
         return new TreeMap<>(contagemPorAno).entrySet().stream()
                 .map(entry -> new SerieTemporalDTO(entry.getKey(), entry.getValue()))
                 .collect(Collectors.toList());
+    }
+
+    public ArticlePageDTO buscarArtigos(
+            String idLattes,
+            Integer ano,
+            EstratoQualis estrato,
+            StatusClassificacaoQualis statusQualis,
+            int page,
+            int size
+    ) {
+        buscarPorId(idLattes);
+
+        Sort sort = Sort.by(
+                Sort.Order.desc("ano").nullsLast(),
+                Sort.Order.asc("titulo").nullsLast(),
+                Sort.Order.asc("id")
+        );
+        Page<Artigo> resultado = artigoRepository.findForDashboard(
+                idLattes,
+                ano,
+                estrato,
+                statusQualis,
+                PageRequest.of(page, size, sort)
+        );
+
+        List<ArticleDetailDTO> items = resultado.getContent().stream()
+                .map(this::toArticleDetailDTO)
+                .toList();
+        return new ArticlePageDTO(
+                items,
+                resultado.getNumber(),
+                resultado.getSize(),
+                resultado.getTotalElements(),
+                resultado.getTotalPages()
+        );
+    }
+
+    public OrientationPageDTO buscarOrientacoes(
+            String idLattes,
+            Integer ano,
+            String status,
+            String tipo,
+            int page,
+            int size
+    ) {
+        buscarPorId(idLattes);
+
+        Sort sort = Sort.by(
+                Sort.Order.desc("ano"),
+                Sort.Order.asc("status"),
+                Sort.Order.asc("nomeOrientado"),
+                Sort.Order.asc("id")
+        );
+        Specification<Orientacao> filtros = (root, query, criteriaBuilder) -> {
+            List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+            predicates.add(criteriaBuilder.equal(root.get("pesquisador").get("idLattes"), idLattes));
+
+            if (ano != null) {
+                predicates.add(criteriaBuilder.equal(root.get("ano"), ano));
+            }
+            if (status != null) {
+                predicates.add(criteriaBuilder.equal(root.get("status"), status));
+            }
+            if (tipo != null && !tipo.isBlank()) {
+                predicates.add(criteriaBuilder.equal(
+                        criteriaBuilder.lower(root.get("tipo")),
+                        tipo.trim().toLowerCase(Locale.ROOT)
+                ));
+            }
+
+            return criteriaBuilder.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
+        };
+        Page<Orientacao> resultado = orientacaoRepository.findAll(filtros, PageRequest.of(page, size, sort));
+
+        List<OrientationDetailDTO> items = resultado.getContent().stream()
+                .map(this::toOrientationDetailDTO)
+                .toList();
+        return new OrientationPageDTO(
+                items,
+                resultado.getNumber(),
+                resultado.getSize(),
+                resultado.getTotalElements(),
+                resultado.getTotalPages()
+        );
     }
 
     public List<CategoriaQuantidadeDTO> buscarBancasPorTipo(String idLattes) {
@@ -271,6 +385,36 @@ public class DashboardService {
         );
     }
 
+    private ArticleDetailDTO toArticleDetailDTO(Artigo artigo) {
+        ClassificacaoQualis classificacao = artigo.getClassificacaoQualis();
+        EstratoQualis estrato = classificacao != null ? classificacao.getEstrato() : null;
+        String titulo = artigo.getTitulo();
+        if (titulo == null || titulo.isBlank()) {
+            titulo = artigo.getCitacaoCompleta();
+        }
+
+        return new ArticleDetailDTO(
+                artigo.getId(),
+                artigo.getAno(),
+                titulo,
+                artigo.getPeriodico(),
+                artigo.getIssn(),
+                estrato,
+                artigo.getStatusQualis()
+        );
+    }
+
+    private OrientationDetailDTO toOrientationDetailDTO(Orientacao orientacao) {
+        return new OrientationDetailDTO(
+                orientacao.getId(),
+                orientacao.getAno(),
+                orientacao.getNomeOrientado(),
+                orientacao.getTituloTrabalho(),
+                orientacao.getTipo(),
+                orientacao.getStatus()
+        );
+    }
+
     private Pesquisador buscarPorId(String idLattes) {
         return pesquisadorRepository.findById(idLattes)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -330,7 +474,9 @@ public class DashboardService {
                     + resumo.getTotalProjetos()
                     + resumo.getTotalBancas()
                     + resumo.getTotalProducoesTecnicas()
-                    + resumo.getTotalTrabalhosEventos();
+                    + resumo.getTotalTrabalhosEventos()
+                    + resumo.getTotalLivros()
+                    + resumo.getTotalCapitulos();
             default -> 0;
         };
     }
