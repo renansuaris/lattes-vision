@@ -1,5 +1,6 @@
 package com.lattesvision.backend.service;
 
+import com.lattesvision.backend.exception.CurriculoLattesNaoEncontradoException;
 import com.lattesvision.backend.model.*;
 import com.lattesvision.backend.repository.PesquisadorRepository;
 import com.lattesvision.backend.service.parser.ArtigoParser;
@@ -78,6 +79,8 @@ public class ScraperService {
             id10 = resolverIdInterno(idLattes, id10, pagePrincipal);
             String htmlCompleto = baixarHtmlComRetry(id10, context, pagePrincipal);
             return parseESalvar(idLattes, id10, htmlCompleto);
+        } catch (CurriculoLattesNaoEncontradoException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Erro ao extrair dados do Lattes: " + e.getMessage(), e);
         }
@@ -120,7 +123,7 @@ public class ScraperService {
         String id10 = extrairParametroId(pagePrincipal.url());
 
         if (id10 == null || id10.length() != 10) {
-            throw new RuntimeException("Falha ao obter ID interno para " + idLattes);
+            throw new CurriculoLattesNaoEncontradoException(idLattes);
         }
         return id10;
     }

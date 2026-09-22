@@ -15,6 +15,7 @@ import com.lattesvision.backend.dto.SerieTemporalDTO;
 import com.lattesvision.backend.dto.SerieGrupoDTO;
 import com.lattesvision.backend.dto.SerieOrientacaoStatusDTO;
 import com.lattesvision.backend.dto.SerieQualisAnoDTO;
+import com.lattesvision.backend.dto.YearRange;
 import com.lattesvision.backend.model.*;
 import com.lattesvision.backend.repository.ArtigoRepository;
 import com.lattesvision.backend.repository.PesquisadorRepository;
@@ -42,6 +43,7 @@ public class DashboardService {
 
     private static final String STATUS_CONCLUIDA = "CONCLUIDA";
     private static final String STATUS_EM_ANDAMENTO = "EM_ANDAMENTO";
+    private static final YearRange ALL_YEARS = new YearRange(null, null);
 
     private final PesquisadorRepository pesquisadorRepository;
     private final ArtigoRepository artigoRepository;
@@ -60,19 +62,27 @@ public class DashboardService {
         this.scraperService = scraperService;
     }
 
+    public ResumoPesquisadorDTO buscarResumoPesquisador(String idLattes, YearRange yearRange) {
+        return toResumoDTO(buscarPorId(idLattes), yearRange);
+    }
+
     public ResumoPesquisadorDTO buscarResumoPesquisador(String idLattes) {
-        return toResumoDTO(buscarPorId(idLattes));
+        return buscarResumoPesquisador(idLattes, ALL_YEARS);
+    }
+
+    public ResumoPesquisadorDTO carregarResumoPesquisador(String idLattes, YearRange yearRange) {
+        return toResumoDTO(carregarOuSincronizar(idLattes), yearRange);
     }
 
     public ResumoPesquisadorDTO carregarResumoPesquisador(String idLattes) {
-        return toResumoDTO(carregarOuSincronizar(idLattes));
+        return carregarResumoPesquisador(idLattes, ALL_YEARS);
     }
 
-    public ResumoGrupoDTO carregarResumoGrupoAdhoc(List<String> idsLattes) {
+    public ResumoGrupoDTO carregarResumoGrupoAdhoc(List<String> idsLattes, YearRange yearRange) {
         List<ResumoPesquisadorDTO> pesquisadores = idsLattes.stream()
                 .distinct()
                 .map(this::carregarOuSincronizar)
-                .map(this::toResumoDTO)
+                .map(pesquisador -> toResumoDTO(pesquisador, yearRange))
                 .collect(Collectors.toList());
 
         ResumoGrupoDTO resumo = new ResumoGrupoDTO();
@@ -92,24 +102,32 @@ public class DashboardService {
         return resumo;
     }
 
-    public List<SerieGrupoDTO> buscarSeriesGrupoAdhoc(List<String> idsLattes) {
+    public ResumoGrupoDTO carregarResumoGrupoAdhoc(List<String> idsLattes) {
+        return carregarResumoGrupoAdhoc(idsLattes, ALL_YEARS);
+    }
+
+    public List<SerieGrupoDTO> buscarSeriesGrupoAdhoc(List<String> idsLattes, YearRange yearRange) {
         Map<Integer, SerieGrupoDTO> seriesPorAno = new TreeMap<>();
 
         idsLattes.stream()
                 .distinct()
                 .map(this::carregarOuSincronizar)
-                .forEach(pesquisador -> agregarSeriesPesquisador(pesquisador, seriesPorAno));
+                .forEach(pesquisador -> agregarSeriesPesquisador(pesquisador, seriesPorAno, yearRange));
 
         return List.copyOf(seriesPorAno.values());
     }
 
-    public List<RankingPesquisadorDTO> buscarRankingGrupoAdhoc(List<String> idsLattes, String metrica) {
+    public List<SerieGrupoDTO> buscarSeriesGrupoAdhoc(List<String> idsLattes) {
+        return buscarSeriesGrupoAdhoc(idsLattes, ALL_YEARS);
+    }
+
+    public List<RankingPesquisadorDTO> buscarRankingGrupoAdhoc(List<String> idsLattes, String metrica, YearRange yearRange) {
         String metricaNormalizada = normalizarMetricaRanking(metrica);
 
         return idsLattes.stream()
                 .distinct()
                 .map(this::carregarOuSincronizar)
-                .map(this::toResumoDTO)
+                .map(pesquisador -> toResumoDTO(pesquisador, yearRange))
                 .map(resumo -> new RankingPesquisadorDTO(
                         resumo.getIdLattes(),
                         resumo.getNomeCompleto(),
@@ -123,12 +141,20 @@ public class DashboardService {
                 .collect(Collectors.toList());
     }
 
-    public ResumoQualisDTO buscarResumoQualisGrupoAdhoc(List<String> idsLattes) {
+    public List<RankingPesquisadorDTO> buscarRankingGrupoAdhoc(List<String> idsLattes, String metrica) {
+        return buscarRankingGrupoAdhoc(idsLattes, metrica, ALL_YEARS);
+    }
+
+    public ResumoQualisDTO buscarResumoQualisGrupoAdhoc(List<String> idsLattes, YearRange yearRange) {
         List<Pesquisador> pesquisadores = idsLattes.stream()
                 .distinct()
                 .map(this::carregarOuSincronizar)
                 .toList();
-        return montarResumoQualis(pesquisadores);
+        return montarResumoQualis(pesquisadores, yearRange);
+    }
+
+    public ResumoQualisDTO buscarResumoQualisGrupoAdhoc(List<String> idsLattes) {
+        return buscarResumoQualisGrupoAdhoc(idsLattes, ALL_YEARS);
     }
 
     private Pesquisador carregarOuSincronizar(String idLattes) {
@@ -136,22 +162,22 @@ public class DashboardService {
         return pesquisadorExistente.orElseGet(() -> scraperService.sincronizarPesquisador(idLattes));
     }
 
-    private ResumoPesquisadorDTO toResumoDTO(Pesquisador pesquisador) {
+    private ResumoPesquisadorDTO toResumoDTO(Pesquisador pesquisador, YearRange yearRange) {
         ResumoPesquisadorDTO resumo = new ResumoPesquisadorDTO();
         resumo.setIdLattes(pesquisador.getIdLattes());
         resumo.setNomeCompleto(pesquisador.getNomeCompleto());
         resumo.setDataUltimaAtualizacao(pesquisador.getDataUltimaAtualizacao());
         resumo.setDataSincronizacao(pesquisador.getDataSincronizacao());
-        resumo.setTotalArtigos(pesquisador.getArtigos().size());
-        resumo.setTotalOrientacoes(pesquisador.getOrientacoes().size());
-        resumo.setTotalOrientacoesConcluidas(contarOrientacoesPorStatus(pesquisador, STATUS_CONCLUIDA));
-        resumo.setTotalOrientacoesEmAndamento(contarOrientacoesPorStatus(pesquisador, STATUS_EM_ANDAMENTO));
-        resumo.setTotalProjetos(pesquisador.getProjetos().size());
-        resumo.setTotalBancas(pesquisador.getBancas().size());
-        resumo.setTotalProducoesTecnicas(pesquisador.getProducoesTecnicas().size());
-        resumo.setTotalTrabalhosEventos(pesquisador.getTrabalhosEventos().size());
-        resumo.setTotalLivros(pesquisador.getLivros().size());
-        resumo.setTotalCapitulos(pesquisador.getCapitulosLivros().size());
+        resumo.setTotalArtigos(contarNoPeriodo(pesquisador.getArtigos().stream().map(Artigo::getAno), yearRange));
+        resumo.setTotalOrientacoes(contarNoPeriodo(pesquisador.getOrientacoes().stream().map(Orientacao::getAno), yearRange));
+        resumo.setTotalOrientacoesConcluidas(contarOrientacoesPorStatus(pesquisador, STATUS_CONCLUIDA, yearRange));
+        resumo.setTotalOrientacoesEmAndamento(contarOrientacoesPorStatus(pesquisador, STATUS_EM_ANDAMENTO, yearRange));
+        resumo.setTotalProjetos(contarNoPeriodo(pesquisador.getProjetos().stream().map(Projeto::getAno), yearRange));
+        resumo.setTotalBancas(contarNoPeriodo(pesquisador.getBancas().stream().map(Banca::getAno), yearRange));
+        resumo.setTotalProducoesTecnicas(contarNoPeriodo(pesquisador.getProducoesTecnicas().stream().map(ProducaoTecnica::getAno), yearRange));
+        resumo.setTotalTrabalhosEventos(contarNoPeriodo(pesquisador.getTrabalhosEventos().stream().map(TrabalhoEvento::getAno), yearRange));
+        resumo.setTotalLivros(contarNoPeriodo(pesquisador.getLivros().stream().map(Livro::getAno), yearRange));
+        resumo.setTotalCapitulos(contarNoPeriodo(pesquisador.getCapitulosLivros().stream().map(CapituloLivro::getAno), yearRange));
         resumo.setTotalProducaoBibliografica(
                 resumo.getTotalArtigos()
                         + resumo.getTotalTrabalhosEventos()
@@ -161,7 +187,7 @@ public class DashboardService {
         return resumo;
     }
 
-    public List<SerieTemporalDTO> buscarSeriesTemporais(String idLattes, String tipo) {
+    public List<SerieTemporalDTO> buscarSeriesTemporais(String idLattes, String tipo, YearRange yearRange) {
         Pesquisador pesquisador = buscarPorId(idLattes);
 
         Map<Integer, Long> contagemPorAno;
@@ -169,32 +195,32 @@ public class DashboardService {
         switch (tipo.toLowerCase()) {
             case "artigos":
                 contagemPorAno = pesquisador.getArtigos().stream()
-                        .filter(a -> a.getAno() != null)
+                        .filter(a -> a.getAno() != null && yearRange.includes(a.getAno()))
                         .collect(Collectors.groupingBy(Artigo::getAno, Collectors.counting()));
                 break;
             case "orientacoes":
                 contagemPorAno = pesquisador.getOrientacoes().stream()
-                        .filter(o -> o.getAno() != null)
+                        .filter(o -> o.getAno() != null && yearRange.includes(o.getAno()))
                         .collect(Collectors.groupingBy(Orientacao::getAno, Collectors.counting()));
                 break;
             case "projetos":
                 contagemPorAno = pesquisador.getProjetos().stream()
-                        .filter(p -> p.getAno() != null)
+                        .filter(p -> p.getAno() != null && yearRange.includes(p.getAno()))
                         .collect(Collectors.groupingBy(Projeto::getAno, Collectors.counting()));
                 break;
             case "bancas":
                 contagemPorAno = pesquisador.getBancas().stream()
-                        .filter(b -> b.getAno() != null)
+                        .filter(b -> b.getAno() != null && yearRange.includes(b.getAno()))
                         .collect(Collectors.groupingBy(Banca::getAno, Collectors.counting()));
                 break;
             case "producoes_tecnicas":
                 contagemPorAno = pesquisador.getProducoesTecnicas().stream()
-                        .filter(pt -> pt.getAno() != null)
+                        .filter(pt -> pt.getAno() != null && yearRange.includes(pt.getAno()))
                         .collect(Collectors.groupingBy(ProducaoTecnica::getAno, Collectors.counting()));
                 break;
             case "trabalhos_eventos":
                 contagemPorAno = pesquisador.getTrabalhosEventos().stream()
-                        .filter(te -> te.getAno() != null)
+                        .filter(te -> te.getAno() != null && yearRange.includes(te.getAno()))
                         .collect(Collectors.groupingBy(TrabalhoEvento::getAno, Collectors.counting()));
                 break;
             default:
@@ -207,9 +233,14 @@ public class DashboardService {
                 .collect(Collectors.toList());
     }
 
+    public List<SerieTemporalDTO> buscarSeriesTemporais(String idLattes, String tipo) {
+        return buscarSeriesTemporais(idLattes, tipo, ALL_YEARS);
+    }
+
     public ArticlePageDTO buscarArtigos(
             String idLattes,
             Integer ano,
+            YearRange yearRange,
             EstratoQualis estrato,
             StatusClassificacaoQualis statusQualis,
             int page,
@@ -225,6 +256,8 @@ public class DashboardService {
         Page<Artigo> resultado = artigoRepository.findForDashboard(
                 idLattes,
                 ano,
+                yearRange.startYear(),
+                yearRange.endYear(),
                 estrato,
                 statusQualis,
                 PageRequest.of(page, size, sort)
@@ -242,9 +275,21 @@ public class DashboardService {
         );
     }
 
+    public ArticlePageDTO buscarArtigos(
+            String idLattes,
+            Integer ano,
+            EstratoQualis estrato,
+            StatusClassificacaoQualis statusQualis,
+            int page,
+            int size
+    ) {
+        return buscarArtigos(idLattes, ano, ALL_YEARS, estrato, statusQualis, page, size);
+    }
+
     public OrientationPageDTO buscarOrientacoes(
             String idLattes,
             Integer ano,
+            YearRange yearRange,
             String status,
             String tipo,
             int page,
@@ -264,6 +309,12 @@ public class DashboardService {
 
             if (ano != null) {
                 predicates.add(criteriaBuilder.equal(root.get("ano"), ano));
+            }
+            if (yearRange.startYear() != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("ano"), yearRange.startYear()));
+            }
+            if (yearRange.endYear() != null) {
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("ano"), yearRange.endYear()));
             }
             if (status != null) {
                 predicates.add(criteriaBuilder.equal(root.get("status"), status));
@@ -291,10 +342,22 @@ public class DashboardService {
         );
     }
 
-    public List<CategoriaQuantidadeDTO> buscarBancasPorTipo(String idLattes) {
+    public OrientationPageDTO buscarOrientacoes(
+            String idLattes,
+            Integer ano,
+            String status,
+            String tipo,
+            int page,
+            int size
+    ) {
+        return buscarOrientacoes(idLattes, ano, ALL_YEARS, status, tipo, page, size);
+    }
+
+    public List<CategoriaQuantidadeDTO> buscarBancasPorTipo(String idLattes, YearRange yearRange) {
         Pesquisador pesquisador = buscarPorId(idLattes);
 
         return pesquisador.getBancas().stream()
+                .filter(banca -> yearRange.includes(banca.getAno()))
                 .collect(Collectors.groupingBy(
                         banca -> normalizarCategoria(banca.getTipo()),
                         Collectors.counting()
@@ -309,12 +372,16 @@ public class DashboardService {
                 .collect(Collectors.toList());
     }
 
-    public List<SerieOrientacaoStatusDTO> buscarOrientacoesPorStatusAno(String idLattes) {
+    public List<CategoriaQuantidadeDTO> buscarBancasPorTipo(String idLattes) {
+        return buscarBancasPorTipo(idLattes, ALL_YEARS);
+    }
+
+    public List<SerieOrientacaoStatusDTO> buscarOrientacoesPorStatusAno(String idLattes, YearRange yearRange) {
         Pesquisador pesquisador = buscarPorId(idLattes);
         Map<Integer, SerieOrientacaoStatusDTO> seriesPorAno = new TreeMap<>();
 
         pesquisador.getOrientacoes().stream()
-                .filter(orientacao -> orientacao.getAno() != null)
+                .filter(orientacao -> orientacao.getAno() != null && yearRange.includes(orientacao.getAno()))
                 .forEach(orientacao -> {
                     SerieOrientacaoStatusDTO serie = seriesPorAno.computeIfAbsent(
                             orientacao.getAno(),
@@ -331,11 +398,19 @@ public class DashboardService {
         return List.copyOf(seriesPorAno.values());
     }
 
-    public ResumoQualisDTO buscarResumoQualis(String idLattes) {
-        return montarResumoQualis(List.of(buscarPorId(idLattes)));
+    public List<SerieOrientacaoStatusDTO> buscarOrientacoesPorStatusAno(String idLattes) {
+        return buscarOrientacoesPorStatusAno(idLattes, ALL_YEARS);
     }
 
-    private ResumoQualisDTO montarResumoQualis(List<Pesquisador> pesquisadores) {
+    public ResumoQualisDTO buscarResumoQualis(String idLattes, YearRange yearRange) {
+        return montarResumoQualis(List.of(buscarPorId(idLattes)), yearRange);
+    }
+
+    public ResumoQualisDTO buscarResumoQualis(String idLattes) {
+        return buscarResumoQualis(idLattes, ALL_YEARS);
+    }
+
+    private ResumoQualisDTO montarResumoQualis(List<Pesquisador> pesquisadores, YearRange yearRange) {
         Map<EstratoQualis, Long> distribuicao = new EnumMap<>(EstratoQualis.class);
         Map<Integer, SerieQualisAnoDTO> seriePorAno = new TreeMap<>();
         long classificados = 0;
@@ -347,8 +422,11 @@ public class DashboardService {
         }
 
         for (Pesquisador pesquisador : pesquisadores) {
-            total += pesquisador.getArtigos().size();
             for (Artigo artigo : pesquisador.getArtigos()) {
+                if (!yearRange.includes(artigo.getAno())) {
+                    continue;
+                }
+                total++;
                 if (artigo.getStatusQualis() == StatusClassificacaoQualis.SEM_ISSN) {
                     semIssn++;
                 }
@@ -423,11 +501,16 @@ public class DashboardService {
                 ));
     }
 
-    private long contarOrientacoesPorStatus(Pesquisador pesquisador, String status) {
+    private long contarOrientacoesPorStatus(Pesquisador pesquisador, String status, YearRange yearRange) {
         return pesquisador.getOrientacoes().stream()
+                .filter(orientacao -> yearRange.includes(orientacao.getAno()))
                 .map(Orientacao::getStatus)
                 .filter(status::equals)
                 .count();
+    }
+
+    private long contarNoPeriodo(java.util.stream.Stream<Integer> anos, YearRange yearRange) {
+        return anos.filter(yearRange::includes).count();
     }
 
     private String normalizarCategoria(String categoria) {
@@ -481,35 +564,41 @@ public class DashboardService {
         };
     }
 
-    private void agregarSeriesPesquisador(Pesquisador pesquisador, Map<Integer, SerieGrupoDTO> seriesPorAno) {
+    private void agregarSeriesPesquisador(Pesquisador pesquisador, Map<Integer, SerieGrupoDTO> seriesPorAno, YearRange yearRange) {
         pesquisador.getArtigos().stream()
                 .map(Artigo::getAno)
                 .filter(java.util.Objects::nonNull)
+                .filter(yearRange::includes)
                 .forEach(ano -> obterSerieAno(seriesPorAno, ano).adicionarArtigo());
 
         pesquisador.getTrabalhosEventos().stream()
                 .map(TrabalhoEvento::getAno)
                 .filter(java.util.Objects::nonNull)
+                .filter(yearRange::includes)
                 .forEach(ano -> obterSerieAno(seriesPorAno, ano).adicionarTrabalhoEvento());
 
         pesquisador.getOrientacoes().stream()
                 .map(Orientacao::getAno)
                 .filter(java.util.Objects::nonNull)
+                .filter(yearRange::includes)
                 .forEach(ano -> obterSerieAno(seriesPorAno, ano).adicionarOrientacao());
 
         pesquisador.getProjetos().stream()
                 .map(Projeto::getAno)
                 .filter(java.util.Objects::nonNull)
+                .filter(yearRange::includes)
                 .forEach(ano -> obterSerieAno(seriesPorAno, ano).adicionarProjeto());
 
         pesquisador.getBancas().stream()
                 .map(Banca::getAno)
                 .filter(java.util.Objects::nonNull)
+                .filter(yearRange::includes)
                 .forEach(ano -> obterSerieAno(seriesPorAno, ano).adicionarBanca());
 
         pesquisador.getProducoesTecnicas().stream()
                 .map(ProducaoTecnica::getAno)
                 .filter(java.util.Objects::nonNull)
+                .filter(yearRange::includes)
                 .forEach(ano -> obterSerieAno(seriesPorAno, ano).adicionarProducaoTecnica());
     }
 

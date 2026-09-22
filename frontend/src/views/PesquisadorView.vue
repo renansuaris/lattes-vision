@@ -2,7 +2,7 @@
   <main class="page-shell">
     <header class="dashboard-header">
       <div>
-        <RouterLink class="back-link" to="/">Voltar para consulta</RouterLink>
+        <RouterLink class="back-link" :to="backDestination">{{ backLabel }}</RouterLink>
         <p class="eyebrow">Pesquisador</p>
         <h1 class="dashboard-title">
           {{ currentResumo?.nomeCompleto ?? 'Dashboard do pesquisador' }}
@@ -11,11 +11,15 @@
       </div>
 
       <div class="dashboard-actions">
-        <button class="button button-secondary" type="button" @click.prevent>
-          Exportar dados
+        <button class="button button-secondary" type="button" :disabled="exporting" @click="exportData">
+          {{ exporting ? 'Preparando exportação...' : 'Exportar dados' }}
         </button>
       </div>
     </header>
+
+    <PeriodFilterPanel :period="activePeriod" @apply="applyPeriod" />
+
+    <section v-if="exportError" class="status-box error">{{ exportError }}</section>
 
     <section v-if="store.errorResumo" class="status-box error">
       {{ store.errorResumo }}
@@ -138,7 +142,6 @@
     <DashboardDrilldownModal
       :open="activeDrilldown !== null"
       :title="drilldownTitle"
-      :subtitle="drilldownSubtitle"
       :columns="drilldownColumns"
       :rows="drilldownRows"
       :page="drilldownPage"
@@ -156,7 +159,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import BibliographicProductionPanel from '../components/dashboard/BibliographicProductionPanel.vue'
 import CategoryPieChart from '../components/dashboard/CategoryPieChart.vue'
@@ -165,20 +168,26 @@ import DashboardDrilldownModal, {
   type DrilldownRow,
 } from '../components/dashboard/DashboardDrilldownModal.vue'
 import OrientacaoStatusChart from '../components/dashboard/OrientacaoStatusChart.vue'
+import PeriodFilterPanel from '../components/dashboard/PeriodFilterPanel.vue'
 import QualisSummaryPanel from '../components/dashboard/QualisSummaryPanel.vue'
 import SerieChart from '../components/dashboard/SerieChart.vue'
+import { exportPesquisadorCsv } from '../services/dashboard.service'
 import { useDashboardStore } from '../stores/dashboard'
 import type {
   ArticleFilters,
   OrientationFilters,
   OrientationStatus,
+  PeriodFilter,
   StatusQualis,
   TipoSerie,
 } from '../types/dashboard'
 
 const route = useRoute()
+const router = useRouter()
 const store = useDashboardStore()
 const activeDrilldown = ref<'articles' | 'orientations' | null>(null)
+const exporting = ref(false)
+const exportError = ref<string | null>(null)
 
 const seriesOptions: Array<{
   value: TipoSerie
@@ -218,6 +227,37 @@ const seriesOptions: Array<{
 ]
 
 const currentId = computed(() => String(route.params.id ?? ''))
+
+const activePeriod = computed<PeriodFilter>(() => ({
+  anoInicial: parseRouteYear(route.query.anoInicial),
+  anoFinal: parseRouteYear(route.query.anoFinal),
+}))
+
+const periodSignature = computed(() => `${activePeriod.value.anoInicial ?? ''}-${activePeriod.value.anoFinal ?? ''}`)
+
+const groupReturnIds = computed(() => String(route.query.grupoIds ?? '')
+  .split(',')
+  .map((id) => id.trim())
+  .filter((id) => /^\d{16}$/.test(id)))
+
+const cameFromGroup = computed(() => route.query.origem === 'grupo' && groupReturnIds.value.length >= 2)
+
+const backDestination = computed(() => {
+  if (!cameFromGroup.value) {
+    return '/'
+  }
+
+  return {
+    name: 'grupo-adhoc',
+    query: {
+      ids: groupReturnIds.value.join(','),
+      anoInicial: activePeriod.value.anoInicial?.toString(),
+      anoFinal: activePeriod.value.anoFinal?.toString(),
+    },
+  }
+})
+
+const backLabel = computed(() => cameFromGroup.value ? 'Voltar para análise de grupo' : 'Voltar para consulta')
 
 const currentResumo = computed(() => {
   if (store.currentResumoId !== currentId.value) {
@@ -273,10 +313,6 @@ const summaryCards = computed(() => {
 const drilldownTitle = computed(() => activeDrilldown.value === 'orientations'
   ? orientationDrilldownTitle()
   : articleDrilldownTitle())
-
-const drilldownSubtitle = computed(() => activeDrilldown.value === 'orientations'
-  ? 'Orientações já persistidas no LattesVision. Nenhuma nova coleta é realizada nesta consulta.'
-  : 'Artigos já persistidos no LattesVision. Nenhuma nova coleta é realizada nesta consulta.')
 
 const drilldownColumns = computed<DrilldownColumn[]>(() => activeDrilldown.value === 'orientations'
   ? [
@@ -474,17 +510,56 @@ async function loadPage() {
     return
   }
 
-  if (!currentResumo.value) {
-    await store.loadResumo(currentId.value)
-  }
+  await store.loadResumo(currentId.value, activePeriod.value)
 
   if (!store.errorResumo) {
-    await store.loadSeries(currentId.value, seriesOptions.map((option) => option.value))
+    await store.loadSeries(currentId.value, seriesOptions.map((option) => option.value), activePeriod.value)
   }
 }
 
+function parseRouteYear(value: unknown): number | undefined {
+  const normalized = String(value ?? '')
+  return /^\d{4}$/.test(normalized) ? Number(normalized) : undefined
+}
+
+async function applyPeriod(period: PeriodFilter) {
+  await router.replace({
+    query: {
+      ...route.query,
+      anoInicial: period.anoInicial?.toString(),
+      anoFinal: period.anoFinal?.toString(),
+    },
+  })
+}
+
+async function exportData() {
+  if (!currentResumo.value) {
+    return
+  }
+
+  exporting.value = true
+  exportError.value = null
+  try {
+    const download = await exportPesquisadorCsv(currentId.value, activePeriod.value)
+    triggerDownload(download.blob, download.fileName)
+  } catch (error) {
+    exportError.value = error instanceof Error ? error.message : 'Não foi possível gerar a exportação.'
+  } finally {
+    exporting.value = false
+  }
+}
+
+function triggerDownload(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 watch(
-  () => currentId.value,
+  () => `${currentId.value}:${periodSignature.value}`,
   async () => {
     activeDrilldown.value = null
     await loadPage()

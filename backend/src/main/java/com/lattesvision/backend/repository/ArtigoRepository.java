@@ -21,12 +21,16 @@ public interface ArtigoRepository extends JpaRepository<Artigo, Long> {
             left join artigo.classificacaoQualis classificacaoQualis
             where artigo.pesquisador.idLattes = :idLattes
               and (:ano is null or artigo.ano = :ano)
+              and (:anoInicial is null or artigo.ano >= :anoInicial)
+              and (:anoFinal is null or artigo.ano <= :anoFinal)
               and (:estrato is null or classificacaoQualis.estrato = :estrato)
               and (:statusQualis is null or artigo.statusQualis = :statusQualis)
             """)
     Page<Artigo> findForDashboard(
             @Param("idLattes") String idLattes,
             @Param("ano") Integer ano,
+            @Param("anoInicial") Integer anoInicial,
+            @Param("anoFinal") Integer anoFinal,
             @Param("estrato") EstratoQualis estrato,
             @Param("statusQualis") StatusClassificacaoQualis statusQualis,
             Pageable pageable

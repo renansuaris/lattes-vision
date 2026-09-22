@@ -18,6 +18,23 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private static final String MENSAGEM_ERRO_INTERNO = "Erro interno ao processar a requisicao.";
 
+    @ExceptionHandler(CurriculoLattesNaoEncontradoException.class)
+    public ResponseEntity<ApiErrorResponse> handleCurriculoLattesNaoEncontrado(
+            CurriculoLattesNaoEncontradoException ex,
+            HttpServletRequest request
+    ) {
+        log.info("Curriculo Lattes nao encontrado para o ID informado: {}", ex.getIdLattes());
+
+        ApiErrorResponse body = buildBody(
+                HttpStatus.NOT_FOUND.value(),
+                HttpStatus.NOT_FOUND.getReasonPhrase(),
+                "CURRICULO_LATTES_NAO_ENCONTRADO",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiErrorResponse> handleResponseStatusException(
             ResponseStatusException ex,

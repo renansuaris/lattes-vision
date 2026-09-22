@@ -15,7 +15,7 @@
     <RouterView />
 
     <footer id="app-footer" class="app-footer">
-      <div class="app-footer__inner">Copyright © LattesVision</div>
+      <div class="app-footer__inner">LattesVision</div>
     </footer>
   </div>
 </template>

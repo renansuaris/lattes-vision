@@ -11,7 +11,6 @@
           <div>
             <p class="eyebrow">Auditoria de dados</p>
             <h2 id="dashboard-drilldown-title">{{ title }}</h2>
-            <p>{{ subtitle }}</p>
           </div>
           <button class="button button-secondary" type="button" @click="emit('close')">
             Fechar
@@ -88,7 +87,6 @@ interface DrilldownPage {
 defineProps<{
   open: boolean
   title: string
-  subtitle: string
   columns: DrilldownColumn[]
   rows: DrilldownRow[]
   page: DrilldownPage | null

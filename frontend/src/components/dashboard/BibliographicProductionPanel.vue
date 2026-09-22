@@ -4,7 +4,6 @@
       <div class="section-header bibliographic-panel__header">
         <div>
           <h2 id="bibliographic-production-title" class="section-title">Produção bibliográfica</h2>
-          <p class="section-subtitle">Itens registrados nos currículos analisados.</p>
         </div>
         <strong class="bibliographic-panel__total">{{ total }} itens</strong>
       </div>

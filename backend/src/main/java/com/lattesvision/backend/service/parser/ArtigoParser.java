@@ -24,6 +24,7 @@ public final class ArtigoParser {
             "span.informacao-artigo[data-tipo-ordenacao=ano]";
     private static final String CABECALHO_ARTIGOS_EM_PERIODICOS =
             "artigos completos publicados em periodicos";
+    private static final Pattern ROTULO_AUTORES_NO_FINAL = Pattern.compile("(?i)\\s+autores\\s*$");
 
     private ArtigoParser() {
     }
@@ -50,11 +51,14 @@ public final class ArtigoParser {
             String textoBruto = elArtigo.text();
             String citacaoLimpada = extrairCitacao(elArtigo);
             Map<String, String> dadosEstruturados = extrairDadosEstruturados(elArtigo);
+            String tituloBruto = valorOuNull(dadosEstruturados.get("titulo"));
+            String tituloLimpo = removerRotuloAutoresFinal(tituloBruto);
+            citacaoLimpada = removerRotuloAutoresDaCitacao(citacaoLimpada, tituloBruto, tituloLimpo);
 
             Artigo novoArtigo = new Artigo();
             novoArtigo.setAno(extrairAno(elArtigo, textoBruto));
             novoArtigo.setCitacaoCompleta(citacaoLimpada);
-            novoArtigo.setTitulo(valorOuNull(dadosEstruturados.get("titulo")));
+            novoArtigo.setTitulo(tituloLimpo);
             novoArtigo.setPeriodico(valorOuNull(dadosEstruturados.get("nomePeriodico")));
             novoArtigo.setIssn(IssnUtils.formatar(dadosEstruturados.get("issn")));
 
@@ -130,6 +134,28 @@ public final class ArtigoParser {
             return null;
         }
         return valor.trim();
+    }
+
+    private static String removerRotuloAutoresFinal(String titulo) {
+        if (titulo == null) {
+            return null;
+        }
+        return ROTULO_AUTORES_NO_FINAL.matcher(titulo).replaceFirst("").trim();
+    }
+
+    private static String removerRotuloAutoresDaCitacao(
+            String citacao,
+            String tituloBruto,
+            String tituloLimpo
+    ) {
+        if (citacao == null || tituloBruto == null || tituloBruto.equals(tituloLimpo)) {
+            return citacao;
+        }
+
+        return citacao.replaceFirst(
+                Pattern.quote(tituloBruto),
+                Matcher.quoteReplacement(tituloLimpo)
+        );
     }
 
     private static String limparCitacao(String textoBruto) {

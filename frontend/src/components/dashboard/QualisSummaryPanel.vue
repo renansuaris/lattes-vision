@@ -5,7 +5,6 @@
         <div>
           <p class="eyebrow">Indicador bibliográfico</p>
           <h2 class="section-title">Qualis dos periódicos</h2>
-          <p class="section-subtitle">{{ description }}</p>
         </div>
       </div>
 
@@ -83,7 +82,7 @@
 
         <div class="qualis-chart-heading">
           <h3>Evolução anual por estrato</h3>
-          <p>{{ chartDescription }}</p>
+          <p v-if="chartDescription">{{ chartDescription }}</p>
         </div>
 
         <QualisStackedBarChart
@@ -119,17 +118,10 @@ const emit = defineEmits<{
   openArticles: [filters: ArticleFilters]
 }>()
 
-const description = computed(() => {
-  const reference = `Qualis CAPES ${props.resumo.baseReferencia}`
-  return props.contexto === 'grupo'
-    ? `${reference} para os artigos do grupo, com identificação por ISSN.`
-    : `Baseado no ${reference}, com identificação por ISSN.`
-})
-
 const distribution = computed(() => props.resumo.distribuicao.filter((item) => item.quantidade > 0))
 
 const chartDescription = computed(() => props.interactive
-  ? 'Clique em uma barra para auditar os artigos daquele ano e estrato.'
+  ? ''
   : 'Clique nos estratos da legenda para comparar ou ocultar séries.')
 
 function formatPercent(value: number) {

@@ -203,6 +203,17 @@ classDiagram
 ### Nota sobre ScriptLattes
 - Utilizar ScriptLattes como etapa de enriquecimento/classificacao no pipeline de sincronizacao (offline ou batch), nao como dependencia em tempo de resposta do dashboard.
 
+## Modelagem do TCC (Atualizado em 2026-09-01)
+
+### Diagramas ja definidos
+- O capitulo/seção `Modelagem do sistema` deve possuir subseções próprias para cada diagrama, evitando apresentar uma figura sem contextualização.
+- **Diagrama de Casos de Uso:** já elaborado. Apresenta as funcionalidades do LattesVision sob a perspectiva do gestor de PPG, como consulta de pesquisadores, visualização de indicadores, filtros e análise individual ou de grupos.
+- **Diagrama de Sequência:** já definido em nível alto para o fluxo de obtenção e visualização do dashboard individual. Participantes: Gestor do PPG, Interface Web, LattesVision, Base de Dados Local e Plataforma Lattes. O fragmento alternativo diferencia o uso de dados já sincronizados da obtenção, processamento, classificação e persistência de um currículo ainda ausente.
+
+### Diretriz de redação
+- O texto do TCC deve refletir somente funcionalidades implementadas. A exportação de dados ainda não deve ser apresentada como caso de uso implementado, pois o botão atual da interface não possui comportamento de exportação.
+- Próximos diagramas serão definidos em sessão futura conforme a evolução do sistema.
+
 ## Arquitetura de Chamadas: Visao de Grupo e Individual (2026-04-29)
 
 ### Cenario funcional
@@ -1305,3 +1316,138 @@ Campos minimos sugeridos para MVP:
 - A faixa superior de indicadores principais passou a conter quatro colunas no desktop: `Orientacoes`, `Projetos`, `Bancas` e `Producoes tecnicas`.
 - Artigos e trabalhos em eventos permanecem apenas no painel de composicao `Producao bibliografica`, eliminando a quebra visual com espacos vazios abaixo dos cards.
 - Em tablet e celular, a grade continua responsiva em duas e uma coluna, respectivamente.
+
+## Refinamentos da Home e Tratamento de Curriculo Inexistente (2026-09-13)
+
+### Tela inicial
+- As imagens decorativas de crescimento e pizza foram removidas da home.
+- A area ganhou fundo quase branco (`#F8FAFC`), formulario mais largo, titulo e subtitulo centralizados e posicionamento vertical central entre cabecalho e rodape.
+- O rodape passou a exibir somente `LattesVision`.
+
+### Entrada de IDs Lattes
+- A entrada foi evoluida para tags removiveis:
+  - ao colar uma lista, cada ID e separado por virgula, espaco ou quebra de linha e exibido como tag;
+  - IDs validos possuem exatamente 16 digitos e IDs repetidos nao sao adicionados duas vezes;
+  - a digitacao aceita apenas numeros, limita cada ID a 16 caracteres e o converte automaticamente em tag ao completar o limite;
+  - IDs invalidos colados ou confirmados aparecem em vermelho e impedem o envio ate serem removidos;
+  - a interface informa quantos curriculos foram adicionados.
+- A explicacao fixa abaixo do campo foi removida. Um botao `?` ao lado de `ID(s) Lattes` abre, por clique, um card com as instrucoes de insercao; ele fecha ao clicar fora, usar `Esc` ou selecionar o fechamento interno.
+
+### Curriculo Lattes nao encontrado
+- Um ID com formato valido (16 digitos) nao garante que exista um curriculo Lattes. Quando o portal nao resolve o ID interno de um curriculo, o backend agora lanca `CurriculoLattesNaoEncontradoException`.
+- `GlobalExceptionHandler` devolve HTTP `404`, codigo `CURRICULO_LATTES_NAO_ENCONTRADO` e a mensagem: `Não foi encontrado um currículo Lattes para o ID informado. Verifique os 16 dígitos e tente novamente.`
+- Falhas reais de rede, Playwright ou parsing permanecem como HTTP `500`.
+- O frontend ja reutiliza a mensagem devolvida pela API, portanto passa a apresentar esse erro amigavel sem ajuste adicional.
+- OpenAPI foi atualizado para documentar o `404` nos endpoints de carregamento individual/grupo e de sincronizacao individual.
+
+### Simplificacao de textos do dashboard
+- Foram removidos textos auxiliares redundantes do painel Qualis, do painel de producao bibliografica e dos modais de auditoria de artigos/orientacoes.
+- A instrucao de clique abaixo do grafico Qualis individual foi removida; a interacao de auditoria por barra permanece ativa.
+
+### Validacao desta sessao
+- Frontend: `npm run build` passou apos os refinamentos visuais.
+- Backend: `mvn -q -Dtest=GlobalExceptionHandlerTest test` e `mvn -q -DskipTests package` passaram.
+- Ao testar a nova resposta para curriculo inexistente em ambiente local, reiniciar o backend no IntelliJ para carregar a nova excecao e o handler.
+
+## Validacao com Usuario-Alvo — Prioridades Levantadas (2026-09-14)
+
+### Contexto
+- Foi realizada uma reuniao de demonstracao e coleta de feedback com o Prof. Criston, integrante da banca avaliadora e representante do publico-alvo do LattesVision.
+- Os pontos abaixo devem orientar a priorizacao dos proximos incrementos. Eles representam necessidades observadas na rotina de analise academica, especialmente no contexto de avaliacao quadrienal.
+
+### 1. Filtros por periodo (prioridade alta)
+- O usuario indicou a necessidade de informar **ano inicial** e **ano final** para limitar a analise.
+- O caso de uso central e o recorte do **ultimo quadrienio**, mas o filtro deve ser generico para permitir qualquer intervalo de anos.
+- O periodo selecionado deve ser aplicado de forma consistente aos indicadores, composicao bibliografica, series, Qualis, rankings, listagens e exportacoes, tanto na visao individual quanto na de grupo.
+- Decidir a inclusao dos limites como intervalo fechado: `ano >= anoInicial` e `ano <= anoFinal`.
+- Manter a ausencia de filtro como visao de todo o historico persistido.
+
+### 2. Exportacao tabular (prioridade alta)
+- O usuario solicitou exportacao em formato que permita conferencia, tratamento e reaproveitamento dos dados: inicialmente **CSV**, com possibilidade de oferecer tambem uma planilha **XLSX**.
+- Para uma analise individual, a exportacao deve reunir os dados extraidos e suas classificacoes relevantes.
+- Para uma analise de grupo, deve gerar uma tabela consolidada, com uma coluna que identifique o pesquisador de origem de cada registro.
+- A exportacao deve respeitar os filtros ativos, em especial o intervalo de anos, e preservar campos que apoiem auditoria: categoria/tipo, ano, titulo ou descricao, pesquisador, status e classificacoes aplicaveis (por exemplo, ISSN, Qualis, ciclo e fonte para artigos).
+- Definir claramente o escopo por tipo de producao e o formato das colunas antes da implementacao; nao prometer PDF como unico formato, pois CSV/XLSX atende melhor ao uso analitico relatado.
+
+### 3. Classificacao de trabalhos em eventos (investigacao antes de implementar)
+- Foi apontada como importante a classificacao de trabalhos completos publicados em eventos, de modo semelhante ao suporte oferecido por ferramentas como o QLattes.
+- Ja existe uma planilha local de referencia com as colunas `Sigla`, `Nome do evento` e `Estrato`.
+- Antes de definir a regra, pesquisar fontes metodologicas e a documentacao/publicacoes do QLattes para confirmar como essa correspondencia e feita na pratica: DOI, sigla do evento, nome do evento normalizado, combinacao de campos ou outra chave.
+- Auditar quais metadados o `TrabalhoEventoParser` efetivamente extrai do Lattes (titulo, nome do evento, sigla, DOI e outros) e comparar com os campos da planilha disponivel.
+- Nao reutilizar a regra de Qualis Periodicos por ISSN: eventos possuem fonte, ciclo, criterios e incertezas proprios. A classificacao deve manter status explicito para registros sem chave ou sem correspondencia, alem de fonte e ciclo da base utilizada.
+- Somente apos essa pesquisa, modelar uma entidade/servico de classificacao separado e expor a informacao no dashboard e na exportacao.
+
+### Ordem recomendada de trabalho
+1. Definir e implementar o filtro global de periodo (ano inicial/final), primeiro em contratos e consultas do backend, depois de forma consistente na interface.
+2. Implementar exportacao CSV respeitando filtros e diferenciando claramente as visoes individual e de grupo; avaliar XLSX como extensao imediata se o formato de planilha for indispensavel.
+3. Realizar a investigacao metodologica e tecnica da classificacao de eventos; so entao estimar e implementar a funcionalidade.
+
+### Uso no TCC
+- Registrar esses pontos como resultados da validacao qualitativa com usuario-alvo, distinguindo necessidades confirmadas de funcionalidades ja implementadas.
+- O feedback reforca que o valor do sistema nao esta apenas na visualizacao, mas tambem no recorte temporal de avaliacao e na capacidade de conferir/reutilizar os dados consolidados.
+
+## Filtro Global de Periodo — Implementado (2026-09-16)
+
+### Regra funcional
+- O filtro e aplicado **apos a sincronizacao**, exclusivamente sobre os dados persistidos e consultados pelo dashboard.
+- O scraping continua coletando e preservando todo o historico disponivel do Curriculo Lattes; trocar o periodo nunca dispara uma nova coleta.
+- Os limites `anoInicial` e `anoFinal` sao inclusivos. Cada limite pode ser usado isoladamente; sem limites, a analise mostra todo o historico.
+- Quando existe um recorte ativo, registros sem ano ficam fora da analise, pois nao podem ser associados de forma confiavel ao intervalo solicitado.
+- A futura exportacao CSV deve reutilizar exatamente os mesmos parametros e a mesma regra de recorte.
+
+### Cobertura atual
+- O recorte foi integrado aos resumos individual e de grupo, producao bibliografica, series, bancas por tipo, orientacoes por status, Qualis, ranking e drill-downs de artigos/orientacoes.
+- Os parametros sao mantidos na URL (`anoInicial` e `anoFinal`), permitindo recarregar, compartilhar e abrir um membro do grupo sem perder o periodo.
+- A interface explica explicitamente que o periodo altera analise e exportacao, nao a sincronizacao.
+
+### Validacao
+- `npm run build` passou no frontend.
+- `mvn -q -DskipTests package` passou no backend.
+- `mvn -q -Dtest=YearRangeTest test` passou, cobrindo inclusao dos limites e tratamento de registros sem ano.
+- `DashboardServiceTest` foi compilado, mas sua execucao continua bloqueada neste ambiente pelo Mockito/ByteBuddy no Java 25; executar com JDK 17 permanece recomendado.
+
+## Exportacao CSV — Implementada (2026-09-16)
+
+### Escopo e regras
+- Foram criados os endpoints `GET /api/dashboard/pesquisadores/{id}/exportacao.csv` e `POST /api/dashboard/grupo-adhoc/exportacao.csv`.
+- A exportacao reutiliza `anoInicial` e `anoFinal`, obedecendo ao mesmo `YearRange` do dashboard.
+- Sem filtro, inclui todo o historico e registros sem ano; com filtro ativo, inclui somente itens cujo ano pertence ao intervalo inclusivo.
+- O fluxo consulta exclusivamente dados ja persistidos. Nenhuma exportacao aciona scraping; um curriculo ausente retorna `404` e orienta analisar o curriculo antes de exportar.
+
+### Conteudo e formato
+- O CSV consolidado exporta artigos, trabalhos em eventos, orientacoes, projetos, bancas, producoes tecnicas, livros e capitulos de livros.
+- Ha uma linha por registro, com pesquisador e ID Lattes tambem na visao individual para facilitar consolidacao posterior.
+- Campos comuns incluem categoria, tipo, ano, titulo, descricao, autores, pessoa relacionada e status; artigos incluem periodico, ISSN, estrato/status/ciclo/fonte Qualis; livros e capitulos incluem editora, ISBN, edicao, volume, paginas, livro de origem e organizadores quando aplicaveis.
+- Arquivo em UTF-8 com BOM, separador `;`, escape de aspas/quebras de linha e protecao contra formulas de planilha iniciadas por `=`, `+`, `-` ou `@`.
+
+### Frontend e validacao
+- Os botoes `Exportar dados` dos dashboards individual e de grupo agora iniciam download via Blob e mantem o periodo da URL.
+- O nome do arquivo indica o escopo e o periodo aplicado.
+- `npm run build`, `mvn -q -DskipTests package` e `git diff --check` passaram.
+- `mvn -q -Dtest=CsvExportServiceTest,YearRangeTest test` passou. `CsvExportServiceTest` nao usa Mockito, permitindo validar exportacao neste ambiente com Java 25.
+- Os testes que usam Mockito, como `DashboardServiceTest`, continuam dependendo de JDK 17 neste ambiente.
+
+## Correcao de Rotulo Residual em Artigos (2026-09-16)
+
+- A auditoria da exportacao identificou um artigo de Enyo Jose Tavares Goncalves cujo titulo e citacao possuíam o sufixo indevido `Autores`.
+- A publicacao externa confirma que `Autores` nao faz parte do titulo; o dado ja estava persistido e a exportacao apenas o reproduzia.
+- `ArtigoParser` agora remove esse rotulo somente quando ele aparece como sufixo isolado no parametro estruturado `titulo` do `cvuri`; a mesma substituicao e aplicada na citacao do mesmo artigo.
+- O fallback para artigos sem `cvuri` permanece inalterado, evitando limpeza textual ampla em registros sem essa evidencia estruturada.
+- `mvn -q -Dtest=ArtigoParserTest test` passou com nova cobertura de regressao.
+- Para refletir a correcao no banco, resincronizar manualmente o curriculo de Enyo (`5885621862397640`).
+
+## Fechamento da Sessao — Filtros, Exportacao e Auditoria (2026-09-16)
+
+### Navegacao entre grupo e pesquisador
+- Ao abrir `Ver individual` a partir de um membro de grupo ad hoc, a URL individual preserva os IDs do grupo e o intervalo de anos ativo.
+- O botao `Voltar para consulta` no dashboard individual retorna ao mesmo grupo e ao mesmo periodo, em vez de redirecionar para a tela inicial.
+
+### Validacao final da correcao do parser
+- A sincronizacao manual posterior do curriculo de Enyo foi exportada em `lattesvision-pesquisador-5885621862397640-historico-completo.csv` para auditoria local.
+- O arquivo possui 198 registros, 24 colunas e nenhuma linha CSV malformada; contem artigos, eventos, orientacoes, projetos, bancas, producoes tecnicas, livros e capitulos.
+- Nenhum titulo ou citacao apresentou o sufixo residual `Autores`. O artigo auditado passou a usar o titulo encerrado em `uma revisao terciaria`.
+
+### Retomada
+1. O proximo incremento prioritario e investigar a classificacao de trabalhos em eventos antes de modela-la, conforme o feedback do usuario-alvo registrado acima.
+2. Manter a separacao arquitetural estabelecida: scraping/sincronizacao sempre coleta o historico completo; filtros, dashboard e exportacao somente recortam os dados persistidos.
+3. Se for necessario executar toda a suite de testes com Mockito, usar JDK 17; neste ambiente com Java 25, os testes puros de parser, `YearRange` e exportacao CSV continuam sendo a validacao executavel.

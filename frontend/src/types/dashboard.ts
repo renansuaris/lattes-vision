@@ -16,6 +16,11 @@ export interface ResumoPesquisador {
   totalProducaoBibliografica: number
 }
 
+export interface PeriodFilter {
+  anoInicial?: number
+  anoFinal?: number
+}
+
 export interface ResumoGrupo {
   totalPesquisadores: number
   pesquisadores: ResumoPesquisador[]
@@ -62,7 +67,7 @@ export type EstratoQualis = 'A1' | 'A2' | 'A3' | 'A4' | 'B1' | 'B2' | 'B3' | 'B4
 
 export type StatusQualis = 'CLASSIFICADO' | 'SEM_ISSN' | 'NAO_CLASSIFICADO'
 
-export interface ArticleFilters {
+export interface ArticleFilters extends PeriodFilter {
   ano?: number
   estrato?: EstratoQualis
   statusQualis?: StatusQualis
@@ -88,7 +93,7 @@ export interface ArticlePage {
 
 export type OrientationStatus = 'CONCLUIDA' | 'EM_ANDAMENTO'
 
-export interface OrientationFilters {
+export interface OrientationFilters extends PeriodFilter {
   ano?: number
   status?: OrientationStatus
   tipo?: string

@@ -18,6 +18,7 @@ import type {
   ArticlePage,
   OrientationFilters,
   OrientationPage,
+  PeriodFilter,
   RankingPesquisadorItem,
   CategoriaQuantidadeItem,
   ResumoGrupo,
@@ -32,6 +33,7 @@ import type {
 
 interface DashboardState {
   currentResumoId: string | null
+  periodFilter: PeriodFilter
   grupoIds: string[]
   resumoGrupo: ResumoGrupo | null
   serieGrupo: SerieGrupoItem[]
@@ -64,6 +66,7 @@ interface DashboardState {
 export const useDashboardStore = defineStore('dashboard', {
   state: (): DashboardState => ({
     currentResumoId: null,
+    periodFilter: {},
     grupoIds: [],
     resumoGrupo: null,
     serieGrupo: [],
@@ -93,11 +96,12 @@ export const useDashboardStore = defineStore('dashboard', {
     errorOrientations: null,
   }),
   actions: {
-    async loadResumo(idLattes: string) {
+    async loadResumo(idLattes: string, period: PeriodFilter = {}) {
       this.loadingResumo = true
       this.errorResumo = null
       this.errorSerie = null
       this.currentResumoId = null
+      this.periodFilter = { ...period }
       this.resumo = null
       this.serie = []
       this.seriesByTipo = {}
@@ -109,7 +113,7 @@ export const useDashboardStore = defineStore('dashboard', {
       this.clearOrientationDetails()
 
       try {
-        this.resumo = await loadResumoPesquisador(idLattes)
+        this.resumo = await loadResumoPesquisador(idLattes, period)
         this.currentResumoId = idLattes
       } catch (error) {
         this.resumo = null
@@ -119,13 +123,14 @@ export const useDashboardStore = defineStore('dashboard', {
         this.loadingResumo = false
       }
     },
-    async loadSerie(idLattes: string, tipo: TipoSerie) {
+    async loadSerie(idLattes: string, tipo: TipoSerie, period?: PeriodFilter) {
       this.loadingSerie = true
       this.errorSerie = null
       this.serieTipo = tipo
+      const appliedPeriod = period ?? this.periodFilter
 
       try {
-        this.serie = await fetchSerieTemporal(idLattes, tipo)
+        this.serie = await fetchSerieTemporal(idLattes, tipo, appliedPeriod)
       } catch (error) {
         this.serie = []
         this.errorSerie = error instanceof Error ? error.message : 'Falha ao carregar serie.'
@@ -133,9 +138,10 @@ export const useDashboardStore = defineStore('dashboard', {
         this.loadingSerie = false
       }
     },
-    async loadSeries(idLattes: string, tipos: TipoSerie[]) {
+    async loadSeries(idLattes: string, tipos: TipoSerie[], period?: PeriodFilter) {
       this.loadingSerie = true
       this.errorSerie = null
+      const appliedPeriod = period ?? this.periodFilter
       this.seriesByTipo = {}
       this.bancasPorTipo = []
       this.orientacoesPorStatusAno = []
@@ -148,12 +154,12 @@ export const useDashboardStore = defineStore('dashboard', {
         const temporalTipos = tipos.filter((tipo) => tipo !== 'bancas' && tipo !== 'orientacoes')
         const [results, bancasPorTipo, orientacoesPorStatusAno, resumoQualis] = await Promise.all([
           Promise.all(temporalTipos.map(async (tipo) => {
-            const data = await fetchSerieTemporal(idLattes, tipo)
+            const data = await fetchSerieTemporal(idLattes, tipo, appliedPeriod)
             return [tipo, data] as const
           })),
-          fetchBancasPorTipo(idLattes),
-          fetchOrientacoesPorStatusAno(idLattes),
-          fetchResumoQualis(idLattes),
+          fetchBancasPorTipo(idLattes, appliedPeriod),
+          fetchOrientacoesPorStatusAno(idLattes, appliedPeriod),
+          fetchResumoQualis(idLattes, appliedPeriod),
         ])
 
         this.seriesByTipo = Object.fromEntries(results) as Partial<Record<TipoSerie, SerieTemporalItem[]>>
@@ -173,12 +179,13 @@ export const useDashboardStore = defineStore('dashboard', {
         this.loadingSerie = false
       }
     },
-    async loadGrupoAdhoc(idsLattes: string[]) {
+    async loadGrupoAdhoc(idsLattes: string[], period: PeriodFilter = {}) {
       this.loadingResumo = true
       this.errorResumo = null
       this.errorSerie = null
       this.errorRanking = null
       this.currentResumoId = null
+      this.periodFilter = { ...period }
       this.grupoIds = []
       this.resumo = null
       this.resumoGrupo = null
@@ -194,7 +201,7 @@ export const useDashboardStore = defineStore('dashboard', {
       this.clearOrientationDetails()
 
       try {
-        this.resumoGrupo = await loadResumoGrupoAdhoc(idsLattes)
+        this.resumoGrupo = await loadResumoGrupoAdhoc(idsLattes, period)
         this.grupoIds = idsLattes
       } catch (error) {
         this.resumoGrupo = null
@@ -204,14 +211,15 @@ export const useDashboardStore = defineStore('dashboard', {
         this.loadingResumo = false
       }
     },
-    async loadSerieGrupoAdhoc(idsLattes: string[]) {
+    async loadSerieGrupoAdhoc(idsLattes: string[], period?: PeriodFilter) {
       this.loadingSerie = true
       this.errorSerie = null
+      const appliedPeriod = period ?? this.periodFilter
 
       try {
         const [serieGrupo, resumoQualisGrupo] = await Promise.all([
-          fetchSerieGrupoAdhoc(idsLattes),
-          fetchResumoQualisGrupoAdhoc(idsLattes),
+          fetchSerieGrupoAdhoc(idsLattes, appliedPeriod),
+          fetchResumoQualisGrupoAdhoc(idsLattes, appliedPeriod),
         ])
         this.serieGrupo = serieGrupo
         this.resumoQualisGrupo = resumoQualisGrupo
@@ -223,13 +231,14 @@ export const useDashboardStore = defineStore('dashboard', {
         this.loadingSerie = false
       }
     },
-    async loadRankingGrupoAdhoc(idsLattes: string[], metrica: TipoRankingGrupo) {
+    async loadRankingGrupoAdhoc(idsLattes: string[], metrica: TipoRankingGrupo, period?: PeriodFilter) {
       this.loadingRanking = true
       this.errorRanking = null
       this.rankingMetrica = metrica
+      const appliedPeriod = period ?? this.periodFilter
 
       try {
-        this.rankingGrupo = await fetchRankingGrupoAdhoc(idsLattes, metrica)
+        this.rankingGrupo = await fetchRankingGrupoAdhoc(idsLattes, metrica, appliedPeriod)
       } catch (error) {
         this.errorRanking = error instanceof Error ? error.message : 'Falha ao carregar ranking do grupo.'
       } finally {
@@ -239,10 +248,10 @@ export const useDashboardStore = defineStore('dashboard', {
     async loadArticleDetails(idLattes: string, filters: ArticleFilters = {}, page = 0) {
       this.loadingArticles = true
       this.errorArticles = null
-      this.articleFilters = { ...filters }
+      this.articleFilters = { ...this.periodFilter, ...filters }
 
       try {
-        this.articlePage = await fetchArticles(idLattes, filters, page)
+        this.articlePage = await fetchArticles(idLattes, this.articleFilters, page)
       } catch (error) {
         this.articlePage = null
         this.errorArticles = error instanceof Error ? error.message : 'Falha ao carregar artigos.'
@@ -259,10 +268,10 @@ export const useDashboardStore = defineStore('dashboard', {
     async loadOrientationDetails(idLattes: string, filters: OrientationFilters = {}, page = 0) {
       this.loadingOrientations = true
       this.errorOrientations = null
-      this.orientationFilters = { ...filters }
+      this.orientationFilters = { ...this.periodFilter, ...filters }
 
       try {
-        this.orientationPage = await fetchOrientations(idLattes, filters, page)
+        this.orientationPage = await fetchOrientations(idLattes, this.orientationFilters, page)
       } catch (error) {
         this.orientationPage = null
         this.errorOrientations = error instanceof Error ? error.message : 'Falha ao carregar orientações.'
@@ -278,6 +287,7 @@ export const useDashboardStore = defineStore('dashboard', {
     },
     reset() {
       this.currentResumoId = null
+      this.periodFilter = {}
       this.grupoIds = []
       this.resumoGrupo = null
       this.serieGrupo = []

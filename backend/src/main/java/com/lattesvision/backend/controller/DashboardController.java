@@ -12,7 +12,9 @@ import com.lattesvision.backend.dto.ResumoQualisDTO;
 import com.lattesvision.backend.dto.SerieGrupoDTO;
 import com.lattesvision.backend.dto.SerieOrientacaoStatusDTO;
 import com.lattesvision.backend.dto.SerieTemporalDTO;
+import com.lattesvision.backend.dto.YearRange;
 import com.lattesvision.backend.service.DashboardService;
+import com.lattesvision.backend.service.CsvExportService;
 import com.lattesvision.backend.model.EstratoQualis;
 import com.lattesvision.backend.model.StatusClassificacaoQualis;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,10 +26,17 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
+import java.io.BufferedWriter;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -40,9 +49,11 @@ public class DashboardController {
     private static final Pattern PADRAO_ID_LATTES = Pattern.compile("^\\d{16}$");
 
     private final DashboardService dashboardService;
+    private final CsvExportService csvExportService;
 
-    public DashboardController(DashboardService dashboardService) {
+    public DashboardController(DashboardService dashboardService, CsvExportService csvExportService) {
         this.dashboardService = dashboardService;
+        this.csvExportService = csvExportService;
     }
 
     @Operation(
@@ -69,10 +80,12 @@ public class DashboardController {
     @GetMapping("/pesquisadores/{id}/resumo")
     public ResponseEntity<ResumoPesquisadorDTO> buscarResumoPesquisador(
             @Parameter(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
-            @PathVariable String id
+            @PathVariable String id,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal
     ) {
         validarIdLattes(id);
-        return ResponseEntity.ok(dashboardService.buscarResumoPesquisador(id));
+        return ResponseEntity.ok(dashboardService.buscarResumoPesquisador(id, criarRecorteAnual(anoInicial, anoFinal)));
     }
 
     @Operation(
@@ -91,6 +104,11 @@ public class DashboardController {
                     content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
             ),
             @ApiResponse(
+                    responseCode = "404",
+                    description = "Curriculo Lattes nao encontrado",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            ),
+            @ApiResponse(
                     responseCode = "500",
                     description = "Erro interno durante carregamento ou sincronizacao",
                     content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
@@ -99,10 +117,29 @@ public class DashboardController {
     @PostMapping("/pesquisadores/{id}/carregar")
     public ResponseEntity<ResumoPesquisadorDTO> carregarResumoPesquisador(
             @Parameter(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
-            @PathVariable String id
+            @PathVariable String id,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal
     ) {
         validarIdLattes(id);
-        return ResponseEntity.ok(dashboardService.carregarResumoPesquisador(id));
+        return ResponseEntity.ok(dashboardService.carregarResumoPesquisador(id, criarRecorteAnual(anoInicial, anoFinal)));
+    }
+
+    @Operation(
+            summary = "Exporta os dados de um pesquisador em CSV",
+            description = "Gera um arquivo CSV a partir dos dados ja persistidos, respeitando o periodo informado e sem executar scraping."
+    )
+    @GetMapping(value = "/pesquisadores/{id}/exportacao.csv", produces = "text/csv")
+    public ResponseEntity<StreamingResponseBody> exportarPesquisadorCsv(
+            @PathVariable String id,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal
+    ) {
+        validarIdLattes(id);
+        YearRange yearRange = criarRecorteAnual(anoInicial, anoFinal);
+        csvExportService.validarPesquisadorDisponivel(id);
+        return criarRespostaCsv(nomeArquivoExportacao("pesquisador-" + id, yearRange),
+                writer -> csvExportService.exportarPesquisador(id, yearRange, writer));
     }
 
     @Operation(
@@ -121,15 +158,41 @@ public class DashboardController {
                     content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
             ),
             @ApiResponse(
+                    responseCode = "404",
+                    description = "Um dos curriculos Lattes nao foi encontrado",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            ),
+            @ApiResponse(
                     responseCode = "500",
                     description = "Erro interno durante carregamento ou sincronizacao",
                     content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
             )
     })
     @PostMapping("/grupo-adhoc/carregar")
-    public ResponseEntity<ResumoGrupoDTO> carregarResumoGrupoAdhoc(@RequestBody GrupoAdhocRequestDTO request) {
+    public ResponseEntity<ResumoGrupoDTO> carregarResumoGrupoAdhoc(
+            @RequestBody GrupoAdhocRequestDTO request,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal
+    ) {
         validarIdsGrupo(request);
-        return ResponseEntity.ok(dashboardService.carregarResumoGrupoAdhoc(request.getIdsLattes()));
+        return ResponseEntity.ok(dashboardService.carregarResumoGrupoAdhoc(request.getIdsLattes(), criarRecorteAnual(anoInicial, anoFinal)));
+    }
+
+    @Operation(
+            summary = "Exporta os dados de um grupo ad-hoc em CSV",
+            description = "Gera um arquivo CSV consolidado a partir dos curriculos ja persistidos, respeitando o periodo informado e sem executar scraping."
+    )
+    @PostMapping(value = "/grupo-adhoc/exportacao.csv", produces = "text/csv")
+    public ResponseEntity<StreamingResponseBody> exportarGrupoAdhocCsv(
+            @RequestBody GrupoAdhocRequestDTO request,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal
+    ) {
+        validarIdsGrupo(request);
+        YearRange yearRange = criarRecorteAnual(anoInicial, anoFinal);
+        csvExportService.validarGrupoDisponivel(request.getIdsLattes());
+        return criarRespostaCsv(nomeArquivoExportacao("grupo", yearRange),
+                writer -> csvExportService.exportarGrupo(request.getIdsLattes(), yearRange, writer));
     }
 
     @Operation(
@@ -149,9 +212,13 @@ public class DashboardController {
             )
     })
     @PostMapping("/grupo-adhoc/series")
-    public ResponseEntity<List<SerieGrupoDTO>> buscarSeriesGrupoAdhoc(@RequestBody GrupoAdhocRequestDTO request) {
+    public ResponseEntity<List<SerieGrupoDTO>> buscarSeriesGrupoAdhoc(
+            @RequestBody GrupoAdhocRequestDTO request,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal
+    ) {
         validarIdsGrupo(request);
-        return ResponseEntity.ok(dashboardService.buscarSeriesGrupoAdhoc(request.getIdsLattes()));
+        return ResponseEntity.ok(dashboardService.buscarSeriesGrupoAdhoc(request.getIdsLattes(), criarRecorteAnual(anoInicial, anoFinal)));
     }
 
     @Operation(
@@ -172,10 +239,12 @@ public class DashboardController {
     })
     @PostMapping("/grupo-adhoc/qualis")
     public ResponseEntity<ResumoQualisDTO> buscarResumoQualisGrupoAdhoc(
-            @RequestBody GrupoAdhocRequestDTO request
+            @RequestBody GrupoAdhocRequestDTO request,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal
     ) {
         validarIdsGrupo(request);
-        return ResponseEntity.ok(dashboardService.buscarResumoQualisGrupoAdhoc(request.getIdsLattes()));
+        return ResponseEntity.ok(dashboardService.buscarResumoQualisGrupoAdhoc(request.getIdsLattes(), criarRecorteAnual(anoInicial, anoFinal)));
     }
 
     @Operation(
@@ -198,10 +267,12 @@ public class DashboardController {
     public ResponseEntity<List<RankingPesquisadorDTO>> buscarRankingGrupoAdhoc(
             @RequestBody GrupoAdhocRequestDTO request,
             @Parameter(description = "Metrica do ranking (total, artigos, orientacoes, projetos, bancas, producoes_tecnicas, trabalhos_eventos)", example = "total")
-            @RequestParam(defaultValue = "total") String metrica
+            @RequestParam(defaultValue = "total") String metrica,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal
     ) {
         validarIdsGrupo(request);
-        return ResponseEntity.ok(dashboardService.buscarRankingGrupoAdhoc(request.getIdsLattes(), metrica));
+        return ResponseEntity.ok(dashboardService.buscarRankingGrupoAdhoc(request.getIdsLattes(), metrica, criarRecorteAnual(anoInicial, anoFinal)));
     }
 
     @Operation(
@@ -230,10 +301,12 @@ public class DashboardController {
             @Parameter(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
             @PathVariable String id,
             @Parameter(description = "Tipo de producao (artigos, orientacoes, projetos, bancas, producoes_tecnicas, trabalhos_eventos)", example = "artigos")
-            @RequestParam String tipo
+            @RequestParam String tipo,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal
     ) {
         validarIdLattes(id);
-        return ResponseEntity.ok(dashboardService.buscarSeriesTemporais(id, tipo));
+        return ResponseEntity.ok(dashboardService.buscarSeriesTemporais(id, tipo, criarRecorteAnual(anoInicial, anoFinal)));
     }
 
     @Operation(
@@ -265,6 +338,8 @@ public class DashboardController {
             @Parameter(description = "Estrato Qualis") @RequestParam(required = false) String estrato,
             @Parameter(description = "Status da cobertura Qualis")
             @RequestParam(required = false) String statusQualis,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal,
             @Parameter(description = "Pagina baseada em zero") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Quantidade de itens por pagina, entre 1 e 100")
             @RequestParam(defaultValue = "20") int size
@@ -274,6 +349,7 @@ public class DashboardController {
         return ResponseEntity.ok(dashboardService.buscarArtigos(
                 id,
                 ano,
+                criarRecorteAnual(anoInicial, anoFinal),
                 converterEstrato(estrato),
                 converterStatusQualis(statusQualis),
                 page,
@@ -311,6 +387,8 @@ public class DashboardController {
             @RequestParam(required = false) String status,
             @Parameter(description = "Tipo da orientacao, por exemplo Mestrado ou Doutorado")
             @RequestParam(required = false) String tipo,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal,
             @Parameter(description = "Pagina baseada em zero") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Quantidade de itens por pagina, entre 1 e 100")
             @RequestParam(defaultValue = "20") int size
@@ -320,6 +398,7 @@ public class DashboardController {
         return ResponseEntity.ok(dashboardService.buscarOrientacoes(
                 id,
                 ano,
+                criarRecorteAnual(anoInicial, anoFinal),
                 converterStatusOrientacao(status),
                 tipo,
                 page,
@@ -351,10 +430,12 @@ public class DashboardController {
     @GetMapping("/pesquisadores/{id}/bancas/tipos")
     public ResponseEntity<List<CategoriaQuantidadeDTO>> buscarBancasPorTipo(
             @Parameter(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
-            @PathVariable String id
+            @PathVariable String id,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal
     ) {
         validarIdLattes(id);
-        return ResponseEntity.ok(dashboardService.buscarBancasPorTipo(id));
+        return ResponseEntity.ok(dashboardService.buscarBancasPorTipo(id, criarRecorteAnual(anoInicial, anoFinal)));
     }
 
     @Operation(
@@ -381,10 +462,12 @@ public class DashboardController {
     @GetMapping("/pesquisadores/{id}/orientacoes/status-series")
     public ResponseEntity<List<SerieOrientacaoStatusDTO>> buscarOrientacoesPorStatusAno(
             @Parameter(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
-            @PathVariable String id
+            @PathVariable String id,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal
     ) {
         validarIdLattes(id);
-        return ResponseEntity.ok(dashboardService.buscarOrientacoesPorStatusAno(id));
+        return ResponseEntity.ok(dashboardService.buscarOrientacoesPorStatusAno(id, criarRecorteAnual(anoInicial, anoFinal)));
     }
 
     @Operation(
@@ -411,10 +494,12 @@ public class DashboardController {
     @GetMapping("/pesquisadores/{id}/qualis")
     public ResponseEntity<ResumoQualisDTO> buscarResumoQualis(
             @Parameter(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
-            @PathVariable String id
+            @PathVariable String id,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal
     ) {
         validarIdLattes(id);
-        return ResponseEntity.ok(dashboardService.buscarResumoQualis(id));
+        return ResponseEntity.ok(dashboardService.buscarResumoQualis(id, criarRecorteAnual(anoInicial, anoFinal)));
     }
 
     private void validarIdLattes(String id) {
@@ -430,6 +515,52 @@ public class DashboardController {
         if (size < 1 || size > 100) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O tamanho da pagina deve estar entre 1 e 100.");
         }
+    }
+
+    private YearRange criarRecorteAnual(Integer anoInicial, Integer anoFinal) {
+        if (anoInicial != null && (anoInicial < 1000 || anoInicial > 9999)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O ano inicial deve ter quatro digitos.");
+        }
+        if (anoFinal != null && (anoFinal < 1000 || anoFinal > 9999)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O ano final deve ter quatro digitos.");
+        }
+        if (anoInicial != null && anoFinal != null && anoInicial > anoFinal) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O ano inicial nao pode ser maior que o ano final.");
+        }
+        return new YearRange(anoInicial, anoFinal);
+    }
+
+    private ResponseEntity<StreamingResponseBody> criarRespostaCsv(String nomeArquivo, EscritorCsv escritorCsv) {
+        StreamingResponseBody corpo = outputStream -> {
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
+            escritorCsv.escrever(writer);
+            writer.flush();
+        };
+        return ResponseEntity.ok()
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(nomeArquivo, StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .body(corpo);
+    }
+
+    private String nomeArquivoExportacao(String escopo, YearRange yearRange) {
+        if (yearRange.startYear() != null && yearRange.endYear() != null) {
+            return "lattesvision-" + escopo + "-" + yearRange.startYear() + "-" + yearRange.endYear() + ".csv";
+        }
+        if (yearRange.startYear() != null) {
+            return "lattesvision-" + escopo + "-a-partir-de-" + yearRange.startYear() + ".csv";
+        }
+        if (yearRange.endYear() != null) {
+            return "lattesvision-" + escopo + "-ate-" + yearRange.endYear() + ".csv";
+        }
+        return "lattesvision-" + escopo + "-historico-completo.csv";
+    }
+
+    @FunctionalInterface
+    private interface EscritorCsv {
+        void escrever(java.io.Writer writer) throws java.io.IOException;
     }
 
     private EstratoQualis converterEstrato(String estrato) {

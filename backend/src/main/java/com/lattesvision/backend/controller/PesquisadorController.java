@@ -82,6 +82,11 @@ public class PesquisadorController {
                     content = @Content(schema = @Schema(implementation = com.lattesvision.backend.dto.ApiErrorResponse.class))
             ),
             @ApiResponse(
+                    responseCode = "404",
+                    description = "Curriculo Lattes nao encontrado",
+                    content = @Content(schema = @Schema(implementation = com.lattesvision.backend.dto.ApiErrorResponse.class))
+            ),
+            @ApiResponse(
                     responseCode = "500",
                     description = "Erro interno ao processar o scraping do Lattes",
                     content = @Content(schema = @Schema(implementation = com.lattesvision.backend.dto.ApiErrorResponse.class))

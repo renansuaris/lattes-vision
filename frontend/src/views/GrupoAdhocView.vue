@@ -9,11 +9,15 @@
       </div>
 
       <div class="dashboard-actions">
-        <button class="button button-secondary" type="button" @click.prevent>
-          Exportar dados
+        <button class="button button-secondary" type="button" :disabled="exporting" @click="exportData">
+          {{ exporting ? 'Preparando exportação...' : 'Exportar dados' }}
         </button>
       </div>
     </header>
+
+    <PeriodFilterPanel :period="activePeriod" @apply="applyPeriod" />
+
+    <section v-if="exportError" class="status-box error">{{ exportError }}</section>
 
     <section v-if="store.errorResumo" class="status-box error">
       {{ store.errorResumo }}
@@ -141,7 +145,15 @@
               </div>
               <RouterLink
                 class="button button-secondary"
-                :to="{ name: 'pesquisador', params: { id: pesquisador.idLattes } }"
+                :to="{
+                  name: 'pesquisador',
+                  params: { id: pesquisador.idLattes },
+                  query: {
+                    ...periodQuery,
+                    origem: 'grupo',
+                    grupoIds: routeIds.join(','),
+                  },
+                }"
               >
                 Ver individual
               </RouterLink>
@@ -155,18 +167,23 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import BibliographicProductionPanel from '../components/dashboard/BibliographicProductionPanel.vue'
 import GrupoRankingChart from '../components/dashboard/GrupoRankingChart.vue'
 import GrupoStackedLineChart from '../components/dashboard/GrupoStackedLineChart.vue'
+import PeriodFilterPanel from '../components/dashboard/PeriodFilterPanel.vue'
 import QualisSummaryPanel from '../components/dashboard/QualisSummaryPanel.vue'
+import { exportGrupoAdhocCsv } from '../services/dashboard.service'
 import { useDashboardStore } from '../stores/dashboard'
-import type { TipoRankingGrupo } from '../types/dashboard'
+import type { PeriodFilter, TipoRankingGrupo } from '../types/dashboard'
 
 const route = useRoute()
+const router = useRouter()
 const store = useDashboardStore()
 const selectedRankingMetric = ref<TipoRankingGrupo>('total')
+const exporting = ref(false)
+const exportError = ref<string | null>(null)
 
 const rankingOptions: Array<{ label: string; value: TipoRankingGrupo }> = [
   { label: 'Total geral', value: 'total' },
@@ -185,6 +202,18 @@ const routeIds = computed(() => {
     .map((id) => id.trim())
     .filter((id) => /^\d{16}$/.test(id))
 })
+
+const activePeriod = computed<PeriodFilter>(() => ({
+  anoInicial: parseRouteYear(route.query.anoInicial),
+  anoFinal: parseRouteYear(route.query.anoFinal),
+}))
+
+const periodSignature = computed(() => `${activePeriod.value.anoInicial ?? ''}-${activePeriod.value.anoFinal ?? ''}`)
+
+const periodQuery = computed(() => ({
+  anoInicial: activePeriod.value.anoInicial?.toString(),
+  anoFinal: activePeriod.value.anoFinal?.toString(),
+}))
 
 const totalIdsLabel = computed(() => {
   const total = store.resumoGrupo?.totalPesquisadores ?? routeIds.value.length
@@ -211,25 +240,15 @@ const selectedRankingLabel = computed(() => {
 })
 
 watch(
-  () => routeIds.value.join(','),
+  () => `${routeIds.value.join(',')}:${periodSignature.value}`,
   async () => {
     if (routeIds.value.length < 2) {
       return
     }
 
-    if (store.resumoGrupo && store.grupoIds.join(',') === routeIds.value.join(',')) {
-      if (store.serieGrupo.length === 0 || !store.resumoQualisGrupo) {
-        await store.loadSerieGrupoAdhoc(routeIds.value)
-      }
-      if (store.rankingGrupo.length === 0 || store.rankingMetrica !== selectedRankingMetric.value) {
-        await store.loadRankingGrupoAdhoc(routeIds.value, selectedRankingMetric.value)
-      }
-      return
-    }
-
-    await store.loadGrupoAdhoc(routeIds.value)
-    await store.loadSerieGrupoAdhoc(routeIds.value)
-    await store.loadRankingGrupoAdhoc(routeIds.value, selectedRankingMetric.value)
+    await store.loadGrupoAdhoc(routeIds.value, activePeriod.value)
+    await store.loadSerieGrupoAdhoc(routeIds.value, activePeriod.value)
+    await store.loadRankingGrupoAdhoc(routeIds.value, selectedRankingMetric.value, activePeriod.value)
   },
   { immediate: true },
 )
@@ -241,7 +260,48 @@ watch(
       return
     }
 
-    await store.loadRankingGrupoAdhoc(routeIds.value, selectedRankingMetric.value)
+    await store.loadRankingGrupoAdhoc(routeIds.value, selectedRankingMetric.value, activePeriod.value)
   },
 )
+
+function parseRouteYear(value: unknown): number | undefined {
+  const normalized = String(value ?? '')
+  return /^\d{4}$/.test(normalized) ? Number(normalized) : undefined
+}
+
+async function applyPeriod(period: PeriodFilter) {
+  await router.replace({
+    query: {
+      ...route.query,
+      anoInicial: period.anoInicial?.toString(),
+      anoFinal: period.anoFinal?.toString(),
+    },
+  })
+}
+
+async function exportData() {
+  if (!store.resumoGrupo) {
+    return
+  }
+
+  exporting.value = true
+  exportError.value = null
+  try {
+    const download = await exportGrupoAdhocCsv(routeIds.value, activePeriod.value)
+    triggerDownload(download.blob, download.fileName)
+  } catch (error) {
+    exportError.value = error instanceof Error ? error.message : 'Não foi possível gerar a exportação.'
+  } finally {
+    exporting.value = false
+  }
+}
+
+function triggerDownload(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(url)
+}
 </script>
