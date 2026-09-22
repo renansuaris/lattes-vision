@@ -1451,3 +1451,50 @@ Campos minimos sugeridos para MVP:
 1. O proximo incremento prioritario e investigar a classificacao de trabalhos em eventos antes de modela-la, conforme o feedback do usuario-alvo registrado acima.
 2. Manter a separacao arquitetural estabelecida: scraping/sincronizacao sempre coleta o historico completo; filtros, dashboard e exportacao somente recortam os dados persistidos.
 3. Se for necessario executar toda a suite de testes com Mockito, usar JDK 17; neste ambiente com Java 25, os testes puros de parser, `YearRange` e exportacao CSV continuam sendo a validacao executavel.
+
+## Drill-down de Bancas — Implementado (2026-09-22)
+
+### Escopo
+- O drill-down foi implementado inicialmente somente no dashboard individual. A visao de grupo ainda nao possui grafico de bancas por tipo, portanto nao recebeu um endpoint de detalhe neste incremento.
+- Clicar no card `Bancas` abre todas as participacoes persistidas do pesquisador; clicar em uma fatia do donut abre o recorte daquele tipo.
+- O modal generico de auditoria foi reutilizado e apresenta `Ano`, `Tipo`, `Candidato(a)` e `Titulo / descricao`, com estados de carregamento, erro, vazio e paginacao.
+
+### Contrato e regras
+- Novo endpoint: `GET /api/dashboard/pesquisadores/{id}/bancas`.
+- Parametros opcionais: `tipo`, `anoInicial`, `anoFinal`, `page` e `size`.
+- A consulta e somente de leitura sobre dados persistidos; ela nunca executa scraping.
+- O filtro de periodo reutiliza `YearRange`, com limites inclusivos e exclusao de itens sem ano quando um periodo esta ativo.
+- A normalizacao e compartilhada com o grafico: `TCC` e apresentado/filtrado como `Graduacao`; `Outra` abrange tipo nulo, vazio ou literal `Outra`. O endpoint tambem aceita `Graduacao` com ou sem acento.
+
+### Componentes alterados
+- Backend: `BancaRepository`, `DashboardService`, `DashboardController`, `BancaDetailDTO` e `BancaPageDTO`.
+- Frontend: `CategoryPieChart`, `PesquisadorView`, store, service e tipos do dashboard.
+- `CategoryPieChart` agora possui interacao opcional e emite a categoria bruta, preservando a correspondencia entre o rotulo visual `Graduação` e o valor de filtro `Graduacao`.
+
+### Validacao
+- `npm run build` passou.
+- `mvn -q -DskipTests package` passou.
+- O backend foi iniciado temporariamente na porta 8081 com PostgreSQL local; a inicializacao validou o novo JPQL do repositorio.
+- `mvn -q -Dtest=DashboardServiceTest test` continuou bloqueado antes de executar os casos pelo Mockito/ByteBuddy no Java 25. O novo caso de teste cobre periodo, normalizacao de `Graduação` e mapeamento do DTO; executa-lo com JDK 17 permanece recomendado.
+- O PostgreSQL local usado para a validacao estava sem pesquisadores persistidos, portanto nao foram inseridos dados artificiais apenas para testar a resposta do endpoint.
+
+## Drill-down de Trabalhos em Eventos — Implementado (2026-09-22)
+
+### Escopo
+- O incremento cobre exclusivamente os trabalhos completos em eventos ja extraidos e persistidos pelo `TrabalhoEventoParser`; nao foi adicionada classificacao, estrato, Qualis, sigla ou DOI.
+- O parser atual captura somente a subseção `Trabalhos completos publicados em anais de congressos`, persistindo titulo, ano, autores, nome do evento e tipo `Completo`.
+- Nao houve alteracao de modelagem, migration, parser ou necessidade de resincronizacao.
+
+### Uso e contrato
+- Clicar na barra anual de `Trabalhos em eventos` abre a auditoria do respectivo ano.
+- O subtotal `Trabalhos completos em eventos` no painel de producao bibliografica tambem abre todos os registros do periodo ativo; a interacao possui suporte a teclado.
+- Novo endpoint: `GET /api/dashboard/pesquisadores/{id}/trabalhos-eventos`.
+- Filtros opcionais: `ano`, `anoInicial`, `anoFinal`, `page` e `size`.
+- O retorno paginado traz `Ano`, `Titulo`, `Evento`, `Autores` e `Tipo`, lendo somente dados persistidos e sem disparar scraping.
+- O periodo reutiliza `YearRange`, com limites inclusivos e exclusao de registros sem ano quando houver recorte ativo.
+
+### Componentes e validacao
+- Backend: `TrabalhoEventoRepository`, `EventWorkDetailDTO`, `EventWorkPageDTO`, `DashboardService` e `DashboardController`.
+- Frontend: painel bibliografico, `PesquisadorView`, store, service e tipos do dashboard; o modal de auditoria foi reutilizado.
+- `npm run build` e `mvn -q -DskipTests package` passaram.
+- A aplicacao iniciou temporariamente na porta 8081 com PostgreSQL local e validou a nova consulta JPA. O teste unitario de servico foi adicionado, mas depende de JDK 17 neste ambiente por causa do Mockito/ByteBuddy no Java 25.

@@ -116,6 +116,47 @@ export interface OrientationPage {
   totalPages: number
 }
 
+export interface BancaFilters extends PeriodFilter {
+  tipo?: string
+}
+
+export interface BancaDetail {
+  id: number | null
+  year: number | null
+  type: string | null
+  candidateName: string | null
+  workTitle: string | null
+}
+
+export interface BancaPage {
+  items: BancaDetail[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+export interface EventWorkFilters extends PeriodFilter {
+  ano?: number
+}
+
+export interface EventWorkDetail {
+  id: number | null
+  year: number | null
+  title: string | null
+  eventName: string | null
+  authors: string | null
+  type: string | null
+}
+
+export interface EventWorkPage {
+  items: EventWorkDetail[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
 export interface CoberturaQualis {
   totalArtigos: number
   classificados: number

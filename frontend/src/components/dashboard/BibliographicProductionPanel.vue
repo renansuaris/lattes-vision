@@ -13,7 +13,13 @@
           <dt>Artigos em periódicos</dt>
           <dd>{{ artigos }}</dd>
         </div>
-        <div>
+        <div
+          :class="{ 'bibliographic-breakdown__item--interactive': interactiveEventWorks }"
+          :role="interactiveEventWorks ? 'button' : undefined"
+          :tabindex="interactiveEventWorks ? 0 : undefined"
+          @click="openEventWorks"
+          @keydown.enter="openEventWorks"
+        >
           <dt>Trabalhos completos em eventos</dt>
           <dd>{{ trabalhosEventos }}</dd>
         </div>
@@ -31,11 +37,22 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   total: number
   artigos: number
   trabalhosEventos: number
   livros: number
   capitulos: number
+  interactiveEventWorks?: boolean
 }>()
+
+const emit = defineEmits<{
+  openEventWorks: []
+}>()
+
+function openEventWorks() {
+  if (props.interactiveEventWorks) {
+    emit('openEventWorks')
+  }
+}
 </script>

@@ -859,6 +859,17 @@ a {
   border-right: 0;
 }
 
+.bibliographic-breakdown__item--interactive {
+  cursor: pointer;
+}
+
+.bibliographic-breakdown__item--interactive:hover,
+.bibliographic-breakdown__item--interactive:focus-visible {
+  background: var(--color-surface-muted);
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
 .bibliographic-breakdown dt {
   color: var(--color-muted);
   font-size: 0.8rem;

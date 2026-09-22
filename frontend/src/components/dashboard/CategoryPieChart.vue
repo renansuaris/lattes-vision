@@ -11,6 +11,11 @@ import type { CategoriaQuantidadeItem } from '../../types/dashboard'
 const props = defineProps<{
   data: CategoriaQuantidadeItem[]
   label: string
+  interactive?: boolean
+}>()
+
+const emit = defineEmits<{
+  selectCategory: [category: string]
 }>()
 
 const chartRoot = ref<HTMLDivElement | null>(null)
@@ -79,11 +84,23 @@ function renderChart() {
         },
         data: props.data.map((item) => ({
           name: formatCategoryLabel(item.categoria),
+          rawCategory: item.categoria,
           value: item.quantidade,
         })),
+        cursor: props.interactive ? 'pointer' : 'default',
       },
     ],
   }, true)
+
+  chart.off('click')
+  if (props.interactive) {
+    chart.on('click', (event) => {
+      const category = (event.data as { rawCategory?: unknown } | undefined)?.rawCategory
+      if (typeof category === 'string') {
+        emit('selectCategory', category)
+      }
+    })
+  }
 }
 
 function resizeChart() {
@@ -96,7 +113,7 @@ onMounted(() => {
 })
 
 watch(
-  () => [props.data, props.label],
+  () => [props.data, props.label, props.interactive],
   () => {
     renderChart()
   },

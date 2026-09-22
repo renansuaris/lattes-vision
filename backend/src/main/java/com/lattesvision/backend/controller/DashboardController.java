@@ -2,6 +2,8 @@ package com.lattesvision.backend.controller;
 
 import com.lattesvision.backend.dto.ApiErrorResponse;
 import com.lattesvision.backend.dto.ArticlePageDTO;
+import com.lattesvision.backend.dto.BancaPageDTO;
+import com.lattesvision.backend.dto.EventWorkPageDTO;
 import com.lattesvision.backend.dto.OrientationPageDTO;
 import com.lattesvision.backend.dto.CategoriaQuantidadeDTO;
 import com.lattesvision.backend.dto.GrupoAdhocRequestDTO;
@@ -358,6 +360,49 @@ public class DashboardController {
     }
 
     @Operation(
+            summary = "Trabalhos completos em eventos paginados para auditoria do dashboard",
+            description = "Retorna trabalhos completos em eventos ja persistidos para um pesquisador, com filtro opcional por ano. Nao executa scraping nem classificacao de eventos."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Pagina de trabalhos em eventos encontrada com sucesso",
+                    content = @Content(schema = @Schema(implementation = EventWorkPageDTO.class))
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "ID ou parametros de paginacao invalidos",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Pesquisador nao encontrado",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            )
+    })
+    @GetMapping("/pesquisadores/{id}/trabalhos-eventos")
+    public ResponseEntity<EventWorkPageDTO> buscarTrabalhosEventos(
+            @Parameter(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
+            @PathVariable String id,
+            @Parameter(description = "Ano de publicacao do trabalho") @RequestParam(required = false) Integer ano,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal,
+            @Parameter(description = "Pagina baseada em zero") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Quantidade de itens por pagina, entre 1 e 100")
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        validarIdLattes(id);
+        validarPaginacao(page, size);
+        return ResponseEntity.ok(dashboardService.buscarTrabalhosEventos(
+                id,
+                ano,
+                criarRecorteAnual(anoInicial, anoFinal),
+                page,
+                size
+        ));
+    }
+
+    @Operation(
             summary = "Orientacoes paginadas para auditoria do dashboard",
             description = "Retorna orientacoes ja persistidas para um pesquisador, com filtros opcionais por ano, status e tipo. Nao executa scraping."
     )
@@ -400,6 +445,50 @@ public class DashboardController {
                 ano,
                 criarRecorteAnual(anoInicial, anoFinal),
                 converterStatusOrientacao(status),
+                tipo,
+                page,
+                size
+        ));
+    }
+
+    @Operation(
+            summary = "Participacoes em bancas paginadas para auditoria do dashboard",
+            description = "Retorna participacoes em bancas ja persistidas para um pesquisador, com filtro opcional pelo tipo exibido no grafico. Nao executa scraping."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Pagina de participacoes em bancas encontrada com sucesso",
+                    content = @Content(schema = @Schema(implementation = BancaPageDTO.class))
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "ID ou parametros de paginacao invalidos",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Pesquisador nao encontrado",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))
+            )
+    })
+    @GetMapping("/pesquisadores/{id}/bancas")
+    public ResponseEntity<BancaPageDTO> buscarBancas(
+            @Parameter(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
+            @PathVariable String id,
+            @Parameter(description = "Tipo exibido no grafico, por exemplo Mestrado, Doutorado ou Graduacao")
+            @RequestParam(required = false) String tipo,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal,
+            @Parameter(description = "Pagina baseada em zero") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Quantidade de itens por pagina, entre 1 e 100")
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        validarIdLattes(id);
+        validarPaginacao(page, size);
+        return ResponseEntity.ok(dashboardService.buscarBancas(
+                id,
+                criarRecorteAnual(anoInicial, anoFinal),
                 tipo,
                 page,
                 size

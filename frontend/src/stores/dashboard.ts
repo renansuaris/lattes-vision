@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 
 import {
   fetchArticles,
+  fetchBancas,
+  fetchEventWorks,
   fetchOrientations,
   fetchBancasPorTipo,
   fetchOrientacoesPorStatusAno,
@@ -16,6 +18,10 @@ import {
 import type {
   ArticleFilters,
   ArticlePage,
+  BancaFilters,
+  BancaPage,
+  EventWorkFilters,
+  EventWorkPage,
   OrientationFilters,
   OrientationPage,
   PeriodFilter,
@@ -50,17 +56,25 @@ interface DashboardState {
   articleFilters: ArticleFilters
   orientationPage: OrientationPage | null
   orientationFilters: OrientationFilters
+  bancaPage: BancaPage | null
+  bancaFilters: BancaFilters
+  eventWorkPage: EventWorkPage | null
+  eventWorkFilters: EventWorkFilters
   serieTipo: TipoSerie
   loadingResumo: boolean
   loadingSerie: boolean
   loadingRanking: boolean
   loadingArticles: boolean
   loadingOrientations: boolean
+  loadingBancas: boolean
+  loadingEventWorks: boolean
   errorResumo: string | null
   errorSerie: string | null
   errorRanking: string | null
   errorArticles: string | null
   errorOrientations: string | null
+  errorBancas: string | null
+  errorEventWorks: string | null
 }
 
 export const useDashboardStore = defineStore('dashboard', {
@@ -83,17 +97,25 @@ export const useDashboardStore = defineStore('dashboard', {
     articleFilters: {},
     orientationPage: null,
     orientationFilters: {},
+    bancaPage: null,
+    bancaFilters: {},
+    eventWorkPage: null,
+    eventWorkFilters: {},
     serieTipo: 'artigos',
     loadingResumo: false,
     loadingSerie: false,
     loadingRanking: false,
     loadingArticles: false,
     loadingOrientations: false,
+    loadingBancas: false,
+    loadingEventWorks: false,
     errorResumo: null,
     errorSerie: null,
     errorRanking: null,
     errorArticles: null,
     errorOrientations: null,
+    errorBancas: null,
+    errorEventWorks: null,
   }),
   actions: {
     async loadResumo(idLattes: string, period: PeriodFilter = {}) {
@@ -111,6 +133,8 @@ export const useDashboardStore = defineStore('dashboard', {
       this.resumoQualisGrupo = null
       this.clearArticleDetails()
       this.clearOrientationDetails()
+      this.clearBancaDetails()
+      this.clearEventWorkDetails()
 
       try {
         this.resumo = await loadResumoPesquisador(idLattes, period)
@@ -149,6 +173,8 @@ export const useDashboardStore = defineStore('dashboard', {
       this.resumoQualisGrupo = null
       this.clearArticleDetails()
       this.clearOrientationDetails()
+      this.clearBancaDetails()
+      this.clearEventWorkDetails()
 
       try {
         const temporalTipos = tipos.filter((tipo) => tipo !== 'bancas' && tipo !== 'orientacoes')
@@ -199,6 +225,8 @@ export const useDashboardStore = defineStore('dashboard', {
       this.resumoQualisGrupo = null
       this.clearArticleDetails()
       this.clearOrientationDetails()
+      this.clearBancaDetails()
+      this.clearEventWorkDetails()
 
       try {
         this.resumoGrupo = await loadResumoGrupoAdhoc(idsLattes, period)
@@ -285,6 +313,46 @@ export const useDashboardStore = defineStore('dashboard', {
       this.loadingOrientations = false
       this.errorOrientations = null
     },
+    async loadBancaDetails(idLattes: string, filters: BancaFilters = {}, page = 0) {
+      this.loadingBancas = true
+      this.errorBancas = null
+      this.bancaFilters = { ...this.periodFilter, ...filters }
+
+      try {
+        this.bancaPage = await fetchBancas(idLattes, this.bancaFilters, page)
+      } catch (error) {
+        this.bancaPage = null
+        this.errorBancas = error instanceof Error ? error.message : 'Falha ao carregar participações em bancas.'
+      } finally {
+        this.loadingBancas = false
+      }
+    },
+    clearBancaDetails() {
+      this.bancaPage = null
+      this.bancaFilters = {}
+      this.loadingBancas = false
+      this.errorBancas = null
+    },
+    async loadEventWorkDetails(idLattes: string, filters: EventWorkFilters = {}, page = 0) {
+      this.loadingEventWorks = true
+      this.errorEventWorks = null
+      this.eventWorkFilters = { ...this.periodFilter, ...filters }
+
+      try {
+        this.eventWorkPage = await fetchEventWorks(idLattes, this.eventWorkFilters, page)
+      } catch (error) {
+        this.eventWorkPage = null
+        this.errorEventWorks = error instanceof Error ? error.message : 'Falha ao carregar trabalhos em eventos.'
+      } finally {
+        this.loadingEventWorks = false
+      }
+    },
+    clearEventWorkDetails() {
+      this.eventWorkPage = null
+      this.eventWorkFilters = {}
+      this.loadingEventWorks = false
+      this.errorEventWorks = null
+    },
     reset() {
       this.currentResumoId = null
       this.periodFilter = {}
@@ -302,16 +370,22 @@ export const useDashboardStore = defineStore('dashboard', {
       this.resumoQualisGrupo = null
       this.clearArticleDetails()
       this.clearOrientationDetails()
+      this.clearBancaDetails()
+      this.clearEventWorkDetails()
       this.errorResumo = null
       this.errorSerie = null
       this.errorRanking = null
       this.errorArticles = null
       this.errorOrientations = null
+      this.errorBancas = null
+      this.errorEventWorks = null
       this.loadingResumo = false
       this.loadingSerie = false
       this.loadingRanking = false
       this.loadingArticles = false
       this.loadingOrientations = false
+      this.loadingBancas = false
+      this.loadingEventWorks = false
       this.serieTipo = 'artigos'
     },
   },

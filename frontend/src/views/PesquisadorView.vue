@@ -53,6 +53,8 @@
         :trabalhos-eventos="currentResumo.totalTrabalhosEventos"
         :livros="currentResumo.totalLivros"
         :capitulos="currentResumo.totalCapitulos"
+        interactive-event-works
+        @open-event-works="openEventWorkDetails"
       />
 
       <QualisSummaryPanel
@@ -104,6 +106,8 @@
                 v-else-if="card.value === 'bancas'"
                 :data="store.bancasPorTipo"
                 :label="card.label"
+                interactive
+                @select-category="openBancaDetails({ tipo: $event })"
               />
 
               <OrientacaoStatusChart
@@ -118,8 +122,8 @@
                 :data="getSerieData(card.value)"
                 :label="card.label"
                 :chart-type="card.value === 'artigos' ? 'line' : 'bar'"
-                :interactive="card.value === 'artigos'"
-                @select-year="openArticleDetails({ ano: $event })"
+                :interactive="card.value === 'artigos' || card.value === 'trabalhos_eventos'"
+                @select-year="openTemporalDetails(card.value, $event)"
               />
             </article>
           </div>
@@ -175,6 +179,8 @@ import { exportPesquisadorCsv } from '../services/dashboard.service'
 import { useDashboardStore } from '../stores/dashboard'
 import type {
   ArticleFilters,
+  BancaFilters,
+  EventWorkFilters,
   OrientationFilters,
   OrientationStatus,
   PeriodFilter,
@@ -185,7 +191,7 @@ import type {
 const route = useRoute()
 const router = useRouter()
 const store = useDashboardStore()
-const activeDrilldown = ref<'articles' | 'orientations' | null>(null)
+const activeDrilldown = ref<'articles' | 'orientations' | 'bancas' | 'eventWorks' | null>(null)
 const exporting = ref(false)
 const exportError = ref<string | null>(null)
 
@@ -202,7 +208,7 @@ const seriesOptions: Array<{
   {
     value: 'trabalhos_eventos',
     label: 'Trabalhos em eventos',
-    description: 'Trabalhos completos publicados em anais.',
+    description: 'Clique em um ano para auditar os trabalhos completos publicados em anais.',
   },
   {
     value: 'orientacoes',
@@ -217,7 +223,7 @@ const seriesOptions: Array<{
   {
     value: 'bancas',
     label: 'Participações em bancas',
-    description: 'Participações distribuídas por tipo de banca.',
+    description: 'Clique em uma fatia para auditar as participações por tipo.',
   },
   {
     value: 'producoes_tecnicas',
@@ -310,28 +316,82 @@ const summaryCards = computed(() => {
   ]
 })
 
-const drilldownTitle = computed(() => activeDrilldown.value === 'orientations'
-  ? orientationDrilldownTitle()
-  : articleDrilldownTitle())
+const drilldownTitle = computed(() => {
+  if (activeDrilldown.value === 'bancas') {
+    return bancaDrilldownTitle()
+  }
+  if (activeDrilldown.value === 'eventWorks') {
+    return eventWorkDrilldownTitle()
+  }
+  if (activeDrilldown.value === 'orientations') {
+    return orientationDrilldownTitle()
+  }
+  return articleDrilldownTitle()
+})
 
-const drilldownColumns = computed<DrilldownColumn[]>(() => activeDrilldown.value === 'orientations'
-  ? [
+const drilldownColumns = computed<DrilldownColumn[]>(() => {
+  if (activeDrilldown.value === 'bancas') {
+    return [
+      { key: 'year', label: 'Ano' },
+      { key: 'type', label: 'Tipo' },
+      { key: 'candidateName', label: 'Candidato(a)' },
+      { key: 'workTitle', label: 'Título / descrição' },
+    ]
+  }
+  if (activeDrilldown.value === 'eventWorks') {
+    return [
+      { key: 'year', label: 'Ano' },
+      { key: 'title', label: 'Título' },
+      { key: 'eventName', label: 'Evento' },
+      { key: 'authors', label: 'Autores' },
+      { key: 'type', label: 'Tipo' },
+    ]
+  }
+  if (activeDrilldown.value === 'orientations') {
+    return [
       { key: 'year', label: 'Ano' },
       { key: 'orientedName', label: 'Orientado(a)' },
       { key: 'workTitle', label: 'Título' },
       { key: 'type', label: 'Tipo' },
       { key: 'status', label: 'Status' },
     ]
-  : [
+  }
+  return [
       { key: 'year', label: 'Ano' },
       { key: 'title', label: 'Título' },
       { key: 'journal', label: 'Periódico' },
       { key: 'issn', label: 'ISSN' },
       { key: 'qualisStratum', label: 'Qualis' },
       { key: 'qualisStatus', label: 'Cobertura' },
-    ])
+  ]
+})
 
 const drilldownRows = computed<DrilldownRow[]>(() => {
+  if (activeDrilldown.value === 'bancas') {
+    return (store.bancaPage?.items ?? []).map((banca, index) => ({
+      id: banca.id ?? `banca-${banca.workTitle}-${index}`,
+      cells: {
+        year: String(banca.year ?? '—'),
+        type: banca.type ?? 'Outra',
+        candidateName: banca.candidateName ?? 'Não identificado',
+        workTitle: banca.workTitle ?? 'Título não identificado',
+      },
+    }))
+  }
+
+  if (activeDrilldown.value === 'eventWorks') {
+    return (store.eventWorkPage?.items ?? []).map((work, index) => ({
+      id: work.id ?? `event-work-${work.title}-${index}`,
+      cells: {
+        year: String(work.year ?? '—'),
+        title: work.title ?? 'Título não identificado',
+        eventName: work.eventName ?? 'Evento não identificado',
+        authors: work.authors ?? 'Autores não identificados',
+        type: work.type ?? '—',
+      },
+    }))
+  }
+
   if (activeDrilldown.value === 'orientations') {
     return (store.orientationPage?.items ?? []).map((orientation, index) => ({
       id: orientation.id ?? `orientation-${orientation.workTitle}-${index}`,
@@ -358,29 +418,67 @@ const drilldownRows = computed<DrilldownRow[]>(() => {
   }))
 })
 
-const drilldownPage = computed(() => activeDrilldown.value === 'orientations'
-  ? store.orientationPage
-  : store.articlePage)
+const drilldownPage = computed(() => {
+  if (activeDrilldown.value === 'bancas') {
+    return store.bancaPage
+  }
+  if (activeDrilldown.value === 'eventWorks') {
+    return store.eventWorkPage
+  }
+  return activeDrilldown.value === 'orientations' ? store.orientationPage : store.articlePage
+})
 
-const drilldownLoading = computed(() => activeDrilldown.value === 'orientations'
-  ? store.loadingOrientations
-  : store.loadingArticles)
+const drilldownLoading = computed(() => {
+  if (activeDrilldown.value === 'bancas') {
+    return store.loadingBancas
+  }
+  if (activeDrilldown.value === 'eventWorks') {
+    return store.loadingEventWorks
+  }
+  return activeDrilldown.value === 'orientations' ? store.loadingOrientations : store.loadingArticles
+})
 
-const drilldownError = computed(() => activeDrilldown.value === 'orientations'
-  ? store.errorOrientations
-  : store.errorArticles)
+const drilldownError = computed(() => {
+  if (activeDrilldown.value === 'bancas') {
+    return store.errorBancas
+  }
+  if (activeDrilldown.value === 'eventWorks') {
+    return store.errorEventWorks
+  }
+  return activeDrilldown.value === 'orientations' ? store.errorOrientations : store.errorArticles
+})
 
-const drilldownLoadingMessage = computed(() => activeDrilldown.value === 'orientations'
-  ? 'Carregando orientações...'
-  : 'Carregando artigos...')
+const drilldownLoadingMessage = computed(() => {
+  if (activeDrilldown.value === 'bancas') {
+    return 'Carregando participações em bancas...'
+  }
+  if (activeDrilldown.value === 'eventWorks') {
+    return 'Carregando trabalhos em eventos...'
+  }
+  return activeDrilldown.value === 'orientations' ? 'Carregando orientações...' : 'Carregando artigos...'
+})
 
-const drilldownEmptyMessage = computed(() => activeDrilldown.value === 'orientations'
-  ? 'Nenhuma orientação foi encontrada para este recorte.'
-  : 'Nenhum artigo foi encontrado para este recorte.')
+const drilldownEmptyMessage = computed(() => {
+  if (activeDrilldown.value === 'bancas') {
+    return 'Nenhuma participação em banca foi encontrada para este recorte.'
+  }
+  if (activeDrilldown.value === 'eventWorks') {
+    return 'Nenhum trabalho em evento foi encontrado para este recorte.'
+  }
+  return activeDrilldown.value === 'orientations'
+    ? 'Nenhuma orientação foi encontrada para este recorte.'
+    : 'Nenhum artigo foi encontrado para este recorte.'
+})
 
-const drilldownTotalLabel = computed(() => activeDrilldown.value === 'orientations' ? 'orientação' : 'artigo')
+const drilldownTotalLabel = computed(() => activeDrilldown.value === 'bancas'
+  ? 'participação em banca'
+  : activeDrilldown.value === 'eventWorks' ? 'trabalho em evento'
+  : activeDrilldown.value === 'orientations' ? 'orientação' : 'artigo')
 
-const drilldownTotalLabelPlural = computed(() => activeDrilldown.value === 'orientations' ? 'orientações' : 'artigos')
+const drilldownTotalLabelPlural = computed(() => activeDrilldown.value === 'bancas'
+  ? 'participações em bancas'
+  : activeDrilldown.value === 'eventWorks' ? 'trabalhos em eventos'
+  : activeDrilldown.value === 'orientations' ? 'orientações' : 'artigos')
 
 function openSummaryCard(key: string) {
   if (key === 'artigos') {
@@ -389,10 +487,13 @@ function openSummaryCard(key: string) {
   if (key === 'orientacoes') {
     openOrientationDetails()
   }
+  if (key === 'bancas') {
+    openBancaDetails()
+  }
 }
 
 function isDrilldownCard(key: string) {
-  return key === 'artigos' || key === 'orientacoes'
+  return key === 'artigos' || key === 'orientacoes' || key === 'bancas'
 }
 
 async function openArticleDetails(filters: ArticleFilters = {}) {
@@ -413,13 +514,53 @@ async function openOrientationDetails(filters: OrientationFilters = {}) {
   await store.loadOrientationDetails(currentId.value, filters)
 }
 
+async function openBancaDetails(filters: BancaFilters = {}) {
+  if (!currentResumo.value) {
+    return
+  }
+
+  activeDrilldown.value = 'bancas'
+  await store.loadBancaDetails(currentId.value, filters)
+}
+
+async function openEventWorkDetails(filters: EventWorkFilters = {}) {
+  if (!currentResumo.value) {
+    return
+  }
+
+  activeDrilldown.value = 'eventWorks'
+  await store.loadEventWorkDetails(currentId.value, filters)
+}
+
+function openTemporalDetails(tipo: TipoSerie, ano: number) {
+  if (tipo === 'trabalhos_eventos') {
+    openEventWorkDetails({ ano })
+    return
+  }
+  if (tipo === 'artigos') {
+    openArticleDetails({ ano })
+  }
+}
+
 function closeDrilldown() {
   activeDrilldown.value = null
   store.clearArticleDetails()
   store.clearOrientationDetails()
+  store.clearBancaDetails()
+  store.clearEventWorkDetails()
 }
 
 async function changeDrilldownPage(page: number) {
+  if (activeDrilldown.value === 'bancas') {
+    await store.loadBancaDetails(currentId.value, store.bancaFilters, page)
+    return
+  }
+
+  if (activeDrilldown.value === 'eventWorks') {
+    await store.loadEventWorkDetails(currentId.value, store.eventWorkFilters, page)
+    return
+  }
+
   if (activeDrilldown.value === 'orientations') {
     await store.loadOrientationDetails(currentId.value, store.orientationFilters, page)
     return
@@ -459,6 +600,28 @@ function orientationDrilldownTitle() {
   }
   if (filters.tipo) {
     parts.push(filters.tipo)
+  }
+
+  return parts.join(' · ')
+}
+
+function bancaDrilldownTitle() {
+  const filters = store.bancaFilters
+  const parts = ['Participações em bancas']
+
+  if (filters.tipo) {
+    parts.push(filters.tipo === 'Graduacao' ? 'Graduação' : filters.tipo)
+  }
+
+  return parts.join(' · ')
+}
+
+function eventWorkDrilldownTitle() {
+  const filters = store.eventWorkFilters
+  const parts = ['Trabalhos completos em eventos']
+
+  if (filters.ano != null) {
+    parts.push(String(filters.ano))
   }
 
   return parts.join(' · ')

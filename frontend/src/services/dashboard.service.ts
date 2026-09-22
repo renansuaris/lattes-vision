@@ -4,6 +4,10 @@ import { api } from './api'
 import type {
   ArticleFilters,
   ArticlePage,
+  BancaFilters,
+  BancaPage,
+  EventWorkFilters,
+  EventWorkPage,
   OrientationFilters,
   OrientationPage,
   PeriodFilter,
@@ -225,6 +229,46 @@ export async function fetchOrientations(
 ): Promise<OrientationPage> {
   try {
     const response = await api.get<OrientationPage>(`/dashboard/pesquisadores/${idLattes}/orientacoes`, {
+      params: {
+        ...filters,
+        page,
+        size,
+      },
+    })
+    return response.data
+  } catch (error) {
+    throw new Error(extractApiError(error))
+  }
+}
+
+export async function fetchBancas(
+  idLattes: string,
+  filters: BancaFilters,
+  page = 0,
+  size = 20,
+): Promise<BancaPage> {
+  try {
+    const response = await api.get<BancaPage>(`/dashboard/pesquisadores/${idLattes}/bancas`, {
+      params: {
+        ...filters,
+        page,
+        size,
+      },
+    })
+    return response.data
+  } catch (error) {
+    throw new Error(extractApiError(error))
+  }
+}
+
+export async function fetchEventWorks(
+  idLattes: string,
+  filters: EventWorkFilters,
+  page = 0,
+  size = 20,
+): Promise<EventWorkPage> {
+  try {
+    const response = await api.get<EventWorkPage>(`/dashboard/pesquisadores/${idLattes}/trabalhos-eventos`, {
       params: {
         ...filters,
         page,

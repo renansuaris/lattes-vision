@@ -3,6 +3,10 @@ package com.lattesvision.backend.service;
 import com.lattesvision.backend.dto.CategoriaQuantidadeDTO;
 import com.lattesvision.backend.dto.ArticleDetailDTO;
 import com.lattesvision.backend.dto.ArticlePageDTO;
+import com.lattesvision.backend.dto.BancaDetailDTO;
+import com.lattesvision.backend.dto.BancaPageDTO;
+import com.lattesvision.backend.dto.EventWorkDetailDTO;
+import com.lattesvision.backend.dto.EventWorkPageDTO;
 import com.lattesvision.backend.dto.OrientationDetailDTO;
 import com.lattesvision.backend.dto.OrientationPageDTO;
 import com.lattesvision.backend.dto.ResumoPesquisadorDTO;
@@ -18,8 +22,10 @@ import com.lattesvision.backend.dto.SerieQualisAnoDTO;
 import com.lattesvision.backend.dto.YearRange;
 import com.lattesvision.backend.model.*;
 import com.lattesvision.backend.repository.ArtigoRepository;
+import com.lattesvision.backend.repository.BancaRepository;
 import com.lattesvision.backend.repository.PesquisadorRepository;
 import com.lattesvision.backend.repository.OrientacaoRepository;
+import com.lattesvision.backend.repository.TrabalhoEventoRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -47,18 +53,24 @@ public class DashboardService {
 
     private final PesquisadorRepository pesquisadorRepository;
     private final ArtigoRepository artigoRepository;
+    private final BancaRepository bancaRepository;
     private final OrientacaoRepository orientacaoRepository;
+    private final TrabalhoEventoRepository trabalhoEventoRepository;
     private final ScraperService scraperService;
 
     public DashboardService(
             PesquisadorRepository pesquisadorRepository,
             ArtigoRepository artigoRepository,
+            BancaRepository bancaRepository,
             OrientacaoRepository orientacaoRepository,
+            TrabalhoEventoRepository trabalhoEventoRepository,
             ScraperService scraperService
     ) {
         this.pesquisadorRepository = pesquisadorRepository;
         this.artigoRepository = artigoRepository;
+        this.bancaRepository = bancaRepository;
         this.orientacaoRepository = orientacaoRepository;
+        this.trabalhoEventoRepository = trabalhoEventoRepository;
         this.scraperService = scraperService;
     }
 
@@ -353,6 +365,76 @@ public class DashboardService {
         return buscarOrientacoes(idLattes, ano, ALL_YEARS, status, tipo, page, size);
     }
 
+    public BancaPageDTO buscarBancas(
+            String idLattes,
+            YearRange yearRange,
+            String tipo,
+            int page,
+            int size
+    ) {
+        buscarPorId(idLattes);
+
+        Sort sort = Sort.by(
+                Sort.Order.desc("ano").nullsLast(),
+                Sort.Order.asc("tipo").nullsLast(),
+                Sort.Order.asc("nomeCandidato").nullsLast(),
+                Sort.Order.asc("tituloTrabalho").nullsLast(),
+                Sort.Order.asc("id")
+        );
+        Page<Banca> resultado = bancaRepository.findForDashboard(
+                idLattes,
+                yearRange.startYear(),
+                yearRange.endYear(),
+                normalizarTipoBancaFiltro(tipo),
+                PageRequest.of(page, size, sort)
+        );
+
+        List<BancaDetailDTO> items = resultado.getContent().stream()
+                .map(this::toBancaDetailDTO)
+                .toList();
+        return new BancaPageDTO(
+                items,
+                resultado.getNumber(),
+                resultado.getSize(),
+                resultado.getTotalElements(),
+                resultado.getTotalPages()
+        );
+    }
+
+    public EventWorkPageDTO buscarTrabalhosEventos(
+            String idLattes,
+            Integer ano,
+            YearRange yearRange,
+            int page,
+            int size
+    ) {
+        buscarPorId(idLattes);
+
+        Sort sort = Sort.by(
+                Sort.Order.desc("ano").nullsLast(),
+                Sort.Order.asc("titulo").nullsLast(),
+                Sort.Order.asc("id")
+        );
+        Page<TrabalhoEvento> resultado = trabalhoEventoRepository.findForDashboard(
+                idLattes,
+                ano,
+                yearRange.startYear(),
+                yearRange.endYear(),
+                PageRequest.of(page, size, sort)
+        );
+
+        List<EventWorkDetailDTO> items = resultado.getContent().stream()
+                .map(this::toEventWorkDetailDTO)
+                .toList();
+        return new EventWorkPageDTO(
+                items,
+                resultado.getNumber(),
+                resultado.getSize(),
+                resultado.getTotalElements(),
+                resultado.getTotalPages()
+        );
+    }
+
     public List<CategoriaQuantidadeDTO> buscarBancasPorTipo(String idLattes, YearRange yearRange) {
         Pesquisador pesquisador = buscarPorId(idLattes);
 
@@ -493,6 +575,27 @@ public class DashboardService {
         );
     }
 
+    private BancaDetailDTO toBancaDetailDTO(Banca banca) {
+        return new BancaDetailDTO(
+                banca.getId(),
+                banca.getAno(),
+                normalizarCategoria(banca.getTipo()),
+                banca.getNomeCandidato(),
+                banca.getTituloTrabalho()
+        );
+    }
+
+    private EventWorkDetailDTO toEventWorkDetailDTO(TrabalhoEvento trabalho) {
+        return new EventWorkDetailDTO(
+                trabalho.getId(),
+                trabalho.getAno(),
+                trabalho.getTitulo(),
+                trabalho.getNomeEvento(),
+                trabalho.getAutores(),
+                trabalho.getTipo()
+        );
+    }
+
     private Pesquisador buscarPorId(String idLattes) {
         return pesquisadorRepository.findById(idLattes)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -524,6 +627,22 @@ public class DashboardService {
         }
 
         return categoriaNormalizada;
+    }
+
+    private String normalizarTipoBancaFiltro(String tipo) {
+        if (tipo == null || tipo.isBlank()) {
+            return null;
+        }
+
+        String tipoNormalizado = java.text.Normalizer.normalize(tipo.trim(), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "");
+        if ("graduacao".equalsIgnoreCase(tipoNormalizado)) {
+            return "Graduacao";
+        }
+        if ("outra".equalsIgnoreCase(tipoNormalizado)) {
+            return "Outra";
+        }
+        return tipo.trim();
     }
 
     private long somar(List<ResumoPesquisadorDTO> pesquisadores, java.util.function.ToLongFunction<ResumoPesquisadorDTO> campo) {
