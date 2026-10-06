@@ -122,7 +122,7 @@
                 :data="getSerieData(card.value)"
                 :label="card.label"
                 :chart-type="card.value === 'artigos' ? 'line' : 'bar'"
-                :interactive="card.value === 'artigos' || card.value === 'trabalhos_eventos'"
+                :interactive="card.value === 'artigos' || card.value === 'trabalhos_eventos' || card.value === 'projetos' || card.value === 'producoes_tecnicas'"
                 @select-year="openTemporalDetails(card.value, $event)"
               />
             </article>
@@ -181,6 +181,9 @@ import type {
   ArticleFilters,
   BancaFilters,
   EventWorkFilters,
+  ProjectFilters,
+  TechnicalProductionCategory,
+  TechnicalProductionFilters,
   OrientationFilters,
   OrientationStatus,
   PeriodFilter,
@@ -191,7 +194,7 @@ import type {
 const route = useRoute()
 const router = useRouter()
 const store = useDashboardStore()
-const activeDrilldown = ref<'articles' | 'orientations' | 'bancas' | 'eventWorks' | null>(null)
+const activeDrilldown = ref<'articles' | 'orientations' | 'bancas' | 'eventWorks' | 'projects' | 'technicalProductions' | null>(null)
 const exporting = ref(false)
 const exportError = ref<string | null>(null)
 
@@ -218,7 +221,7 @@ const seriesOptions: Array<{
   {
     value: 'projetos',
     label: 'Projetos',
-    description: 'Projetos desenvolvidos ao longo dos anos.',
+    description: 'Clique em um ano para auditar os projetos iniciados naquele ano.',
   },
   {
     value: 'bancas',
@@ -228,7 +231,7 @@ const seriesOptions: Array<{
   {
     value: 'producoes_tecnicas',
     label: 'Produções técnicas',
-    description: 'Softwares, produtos e outras produções técnicas.',
+    description: 'Clique em um ano para auditar os softwares, produtos e outras produções técnicas.',
   },
 ]
 
@@ -317,6 +320,14 @@ const summaryCards = computed(() => {
 })
 
 const drilldownTitle = computed(() => {
+  if (activeDrilldown.value === 'technicalProductions') {
+    const year = store.technicalProductionFilters.ano
+    return year != null ? `Produções técnicas · ${year}` : 'Produções técnicas'
+  }
+  if (activeDrilldown.value === 'projects') {
+    const year = store.projectFilters.ano
+    return year != null ? `Projetos · Iniciados em ${year}` : 'Projetos'
+  }
   if (activeDrilldown.value === 'bancas') {
     return bancaDrilldownTitle()
   }
@@ -330,6 +341,22 @@ const drilldownTitle = computed(() => {
 })
 
 const drilldownColumns = computed<DrilldownColumn[]>(() => {
+  if (activeDrilldown.value === 'technicalProductions') {
+    return [
+      { key: 'year', label: 'Ano' },
+      { key: 'category', label: 'Categoria', cellClass: 'technical-category-cell' },
+      { key: 'title', label: 'Título', cellClass: 'technical-text-cell' },
+      { key: 'authors', label: 'Autores', cellClass: 'technical-text-cell' },
+      { key: 'nature', label: 'Natureza', cellClass: 'technical-text-cell' },
+    ]
+  }
+  if (activeDrilldown.value === 'projects') {
+    return [
+      { key: 'year', label: 'Ano de início' },
+      { key: 'type', label: 'Tipo', cellClass: 'project-type-cell' },
+      { key: 'title', label: 'Título / descrição', cellClass: 'project-description-cell' },
+    ]
+  }
   if (activeDrilldown.value === 'bancas') {
     return [
       { key: 'year', label: 'Ano' },
@@ -367,6 +394,28 @@ const drilldownColumns = computed<DrilldownColumn[]>(() => {
 })
 
 const drilldownRows = computed<DrilldownRow[]>(() => {
+  if (activeDrilldown.value === 'technicalProductions') {
+    return (store.technicalProductionPage?.items ?? []).map((production, index) => ({
+      id: production.id ?? `technical-production-${index}`,
+      cells: {
+        year: String(production.year ?? '—'),
+        category: technicalProductionCategoryLabel(production.category),
+        title: production.title?.trim() || production.rawDescription?.trim() || '—',
+        authors: production.authors?.trim() || '—',
+        nature: production.nature?.trim() || '—',
+      },
+    }))
+  }
+  if (activeDrilldown.value === 'projects') {
+    return (store.projectPage?.items ?? []).map((project, index) => ({
+      id: project.id ?? `project-${index}`,
+      cells: {
+        year: String(project.year ?? '—'),
+        type: project.type === 'Extensao' ? 'Extensão' : project.type || '—',
+        title: project.title || 'Título não identificado',
+      },
+    }))
+  }
   if (activeDrilldown.value === 'bancas') {
     return (store.bancaPage?.items ?? []).map((banca, index) => ({
       id: banca.id ?? `banca-${banca.workTitle}-${index}`,
@@ -419,6 +468,8 @@ const drilldownRows = computed<DrilldownRow[]>(() => {
 })
 
 const drilldownPage = computed(() => {
+  if (activeDrilldown.value === 'technicalProductions') return store.technicalProductionPage
+  if (activeDrilldown.value === 'projects') return store.projectPage
   if (activeDrilldown.value === 'bancas') {
     return store.bancaPage
   }
@@ -429,6 +480,8 @@ const drilldownPage = computed(() => {
 })
 
 const drilldownLoading = computed(() => {
+  if (activeDrilldown.value === 'technicalProductions') return store.loadingTechnicalProductions
+  if (activeDrilldown.value === 'projects') return store.loadingProjects
   if (activeDrilldown.value === 'bancas') {
     return store.loadingBancas
   }
@@ -439,6 +492,8 @@ const drilldownLoading = computed(() => {
 })
 
 const drilldownError = computed(() => {
+  if (activeDrilldown.value === 'technicalProductions') return store.errorTechnicalProductions
+  if (activeDrilldown.value === 'projects') return store.errorProjects
   if (activeDrilldown.value === 'bancas') {
     return store.errorBancas
   }
@@ -449,6 +504,8 @@ const drilldownError = computed(() => {
 })
 
 const drilldownLoadingMessage = computed(() => {
+  if (activeDrilldown.value === 'technicalProductions') return 'Carregando produções técnicas...'
+  if (activeDrilldown.value === 'projects') return 'Carregando projetos...'
   if (activeDrilldown.value === 'bancas') {
     return 'Carregando participações em bancas...'
   }
@@ -459,6 +516,8 @@ const drilldownLoadingMessage = computed(() => {
 })
 
 const drilldownEmptyMessage = computed(() => {
+  if (activeDrilldown.value === 'technicalProductions') return 'Nenhuma produção técnica foi encontrada para este recorte.'
+  if (activeDrilldown.value === 'projects') return 'Nenhum projeto foi encontrado para este recorte.'
   if (activeDrilldown.value === 'bancas') {
     return 'Nenhuma participação em banca foi encontrada para este recorte.'
   }
@@ -472,15 +531,25 @@ const drilldownEmptyMessage = computed(() => {
 
 const drilldownTotalLabel = computed(() => activeDrilldown.value === 'bancas'
   ? 'participação em banca'
+  : activeDrilldown.value === 'technicalProductions' ? 'produção técnica'
+  : activeDrilldown.value === 'projects' ? 'projeto'
   : activeDrilldown.value === 'eventWorks' ? 'trabalho em evento'
   : activeDrilldown.value === 'orientations' ? 'orientação' : 'artigo')
 
 const drilldownTotalLabelPlural = computed(() => activeDrilldown.value === 'bancas'
   ? 'participações em bancas'
+  : activeDrilldown.value === 'technicalProductions' ? 'produções técnicas'
+  : activeDrilldown.value === 'projects' ? 'projetos'
   : activeDrilldown.value === 'eventWorks' ? 'trabalhos em eventos'
   : activeDrilldown.value === 'orientations' ? 'orientações' : 'artigos')
 
 function openSummaryCard(key: string) {
+  if (key === 'producoes_tecnicas') {
+    openTechnicalProductionDetails()
+  }
+  if (key === 'projetos') {
+    openProjectDetails()
+  }
   if (key === 'artigos') {
     openArticleDetails()
   }
@@ -493,7 +562,7 @@ function openSummaryCard(key: string) {
 }
 
 function isDrilldownCard(key: string) {
-  return key === 'artigos' || key === 'orientacoes' || key === 'bancas'
+  return key === 'artigos' || key === 'orientacoes' || key === 'bancas' || key === 'projetos' || key === 'producoes_tecnicas'
 }
 
 async function openArticleDetails(filters: ArticleFilters = {}) {
@@ -532,7 +601,29 @@ async function openEventWorkDetails(filters: EventWorkFilters = {}) {
   await store.loadEventWorkDetails(currentId.value, filters)
 }
 
+async function openProjectDetails(filters: ProjectFilters = {}) {
+  if (!currentResumo.value) return
+
+  activeDrilldown.value = 'projects'
+  await store.loadProjectDetails(currentId.value, filters)
+}
+
+async function openTechnicalProductionDetails(filters: TechnicalProductionFilters = {}) {
+  if (!currentResumo.value) return
+
+  activeDrilldown.value = 'technicalProductions'
+  await store.loadTechnicalProductionDetails(currentId.value, filters)
+}
+
 function openTemporalDetails(tipo: TipoSerie, ano: number) {
+  if (tipo === 'producoes_tecnicas') {
+    openTechnicalProductionDetails({ ano })
+    return
+  }
+  if (tipo === 'projetos') {
+    openProjectDetails({ ano })
+    return
+  }
   if (tipo === 'trabalhos_eventos') {
     openEventWorkDetails({ ano })
     return
@@ -548,9 +639,19 @@ function closeDrilldown() {
   store.clearOrientationDetails()
   store.clearBancaDetails()
   store.clearEventWorkDetails()
+  store.clearProjectDetails()
+  store.clearTechnicalProductionDetails()
 }
 
 async function changeDrilldownPage(page: number) {
+  if (activeDrilldown.value === 'technicalProductions') {
+    await store.loadTechnicalProductionDetails(currentId.value, store.technicalProductionFilters, page)
+    return
+  }
+  if (activeDrilldown.value === 'projects') {
+    await store.loadProjectDetails(currentId.value, store.projectFilters, page)
+    return
+  }
   if (activeDrilldown.value === 'bancas') {
     await store.loadBancaDetails(currentId.value, store.bancaFilters, page)
     return
@@ -625,6 +726,18 @@ function eventWorkDrilldownTitle() {
   }
 
   return parts.join(' · ')
+}
+
+function technicalProductionCategoryLabel(category: TechnicalProductionCategory | null) {
+  const labels: Record<TechnicalProductionCategory, string> = {
+    SOFTWARE_COM_REGISTRO: 'Software com registro',
+    SOFTWARE_SEM_REGISTRO: 'Software sem registro',
+    PRODUTO_TECNOLOGICO: 'Produto tecnológico',
+    PROCESSO_OU_TECNICA: 'Processo ou técnica',
+    TRABALHO_TECNICO: 'Trabalho técnico',
+    OUTRA: 'Outra produção técnica',
+  }
+  return category ? labels[category] ?? '—' : '—'
 }
 
 function qualisStatusLabel(status: StatusQualis | null) {

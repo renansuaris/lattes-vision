@@ -4,6 +4,8 @@ import {
   fetchArticles,
   fetchBancas,
   fetchEventWorks,
+  fetchProjects,
+  fetchTechnicalProductions,
   fetchOrientations,
   fetchBancasPorTipo,
   fetchOrientacoesPorStatusAno,
@@ -22,6 +24,10 @@ import type {
   BancaPage,
   EventWorkFilters,
   EventWorkPage,
+  ProjectFilters,
+  ProjectPage,
+  TechnicalProductionFilters,
+  TechnicalProductionPage,
   OrientationFilters,
   OrientationPage,
   PeriodFilter,
@@ -38,6 +44,8 @@ import type {
 } from '../types/dashboard'
 
 interface DashboardState {
+  analysisProgress: { total: number; completed: number; currentId: string | null; stage: 'idle' | 'consulting' | 'preparing' | 'done' | 'error' }
+  analysisRunId: number
   currentResumoId: string | null
   periodFilter: PeriodFilter
   grupoIds: string[]
@@ -60,6 +68,16 @@ interface DashboardState {
   bancaFilters: BancaFilters
   eventWorkPage: EventWorkPage | null
   eventWorkFilters: EventWorkFilters
+  projectPage: ProjectPage | null
+  projectFilters: ProjectFilters
+  loadingProjects: boolean
+  errorProjects: string | null
+  projectRequestId: number
+  technicalProductionPage: TechnicalProductionPage | null
+  technicalProductionFilters: TechnicalProductionFilters
+  loadingTechnicalProductions: boolean
+  errorTechnicalProductions: string | null
+  technicalProductionRequestId: number
   serieTipo: TipoSerie
   loadingResumo: boolean
   loadingSerie: boolean
@@ -79,6 +97,8 @@ interface DashboardState {
 
 export const useDashboardStore = defineStore('dashboard', {
   state: (): DashboardState => ({
+    analysisProgress: { total: 0, completed: 0, currentId: null, stage: 'idle' },
+    analysisRunId: 0,
     currentResumoId: null,
     periodFilter: {},
     grupoIds: [],
@@ -101,6 +121,16 @@ export const useDashboardStore = defineStore('dashboard', {
     bancaFilters: {},
     eventWorkPage: null,
     eventWorkFilters: {},
+    projectPage: null,
+    projectFilters: {},
+    loadingProjects: false,
+    errorProjects: null,
+    projectRequestId: 0,
+    technicalProductionPage: null,
+    technicalProductionFilters: {},
+    loadingTechnicalProductions: false,
+    errorTechnicalProductions: null,
+    technicalProductionRequestId: 0,
     serieTipo: 'artigos',
     loadingResumo: false,
     loadingSerie: false,
@@ -118,6 +148,49 @@ export const useDashboardStore = defineStore('dashboard', {
     errorEventWorks: null,
   }),
   actions: {
+    cancelAnalysis() {
+      this.analysisRunId++
+      this.analysisProgress.stage = 'idle'
+    },
+    async analyzeIds(inputIds: string[]): Promise<boolean> {
+      const ids = [...new Set(inputIds)]
+      if (!ids.length) return false
+      const runId = ++this.analysisRunId
+      this.reset()
+      this.analysisProgress = { total: ids.length, completed: 0, currentId: null, stage: 'consulting' }
+      let individualResumo: ResumoPesquisador | null = null
+      try {
+        for (const id of ids) {
+          if (runId !== this.analysisRunId) return false
+          this.analysisProgress.currentId = id
+          individualResumo = await loadResumoPesquisador(id)
+          if (runId !== this.analysisRunId) return false
+          this.analysisProgress.completed++
+        }
+        this.analysisProgress.currentId = null
+        this.analysisProgress.stage = 'preparing'
+        if (ids.length === 1) {
+          this.resumo = individualResumo
+          this.currentResumoId = ids[0]!
+        } else {
+          const resumo = await loadResumoGrupoAdhoc(ids)
+          if (runId !== this.analysisRunId) return false
+          this.resumoGrupo = resumo
+          this.grupoIds = ids
+        }
+        this.analysisProgress.stage = 'done'
+        return true
+      } catch (error) {
+        if (runId !== this.analysisRunId) return false
+        const { currentId, completed, total } = this.analysisProgress
+        const context = currentId
+          ? `Não foi possível consultar o currículo ${currentId}.`
+          : 'Não foi possível preparar os indicadores do grupo.'
+        this.errorResumo = `${context} ${completed} de ${total} currículos concluídos. ${error instanceof Error ? error.message : 'Tente novamente.'}`
+        this.analysisProgress.stage = 'error'
+        return false
+      }
+    },
     async loadResumo(idLattes: string, period: PeriodFilter = {}) {
       this.loadingResumo = true
       this.errorResumo = null
@@ -135,6 +208,8 @@ export const useDashboardStore = defineStore('dashboard', {
       this.clearOrientationDetails()
       this.clearBancaDetails()
       this.clearEventWorkDetails()
+      this.clearProjectDetails()
+      this.clearTechnicalProductionDetails()
 
       try {
         this.resumo = await loadResumoPesquisador(idLattes, period)
@@ -353,6 +428,58 @@ export const useDashboardStore = defineStore('dashboard', {
       this.loadingEventWorks = false
       this.errorEventWorks = null
     },
+    async loadProjectDetails(idLattes: string, filters: ProjectFilters = {}, page = 0) {
+      const requestId = ++this.projectRequestId
+      this.loadingProjects = true
+      this.errorProjects = null
+      this.projectFilters = { ...filters, ...this.periodFilter }
+
+      try {
+        const result = await fetchProjects(idLattes, this.projectFilters, page)
+        if (requestId === this.projectRequestId) this.projectPage = result
+      } catch (error) {
+        if (requestId === this.projectRequestId) {
+          this.projectPage = null
+          this.errorProjects = error instanceof Error ? error.message : 'Falha ao carregar projetos.'
+        }
+      } finally {
+        if (requestId === this.projectRequestId) this.loadingProjects = false
+      }
+    },
+    clearProjectDetails() {
+      // Impede que uma resposta antiga restaure dados apos fechar ou trocar o recorte.
+      this.projectRequestId++
+      this.projectPage = null
+      this.projectFilters = {}
+      this.loadingProjects = false
+      this.errorProjects = null
+    },
+    async loadTechnicalProductionDetails(idLattes: string, filters: TechnicalProductionFilters = {}, page = 0) {
+      const requestId = ++this.technicalProductionRequestId
+      this.loadingTechnicalProductions = true
+      this.errorTechnicalProductions = null
+      this.technicalProductionFilters = { ...filters, ...this.periodFilter }
+
+      try {
+        const result = await fetchTechnicalProductions(idLattes, this.technicalProductionFilters, page)
+        if (requestId === this.technicalProductionRequestId) this.technicalProductionPage = result
+      } catch (error) {
+        if (requestId === this.technicalProductionRequestId) {
+          this.technicalProductionPage = null
+          this.errorTechnicalProductions = error instanceof Error ? error.message : 'Falha ao carregar produções técnicas.'
+        }
+      } finally {
+        if (requestId === this.technicalProductionRequestId) this.loadingTechnicalProductions = false
+      }
+    },
+    clearTechnicalProductionDetails() {
+      // Descarta respostas de consultas anteriores ao fechar ou trocar pesquisador/periodo.
+      this.technicalProductionRequestId++
+      this.technicalProductionPage = null
+      this.technicalProductionFilters = {}
+      this.loadingTechnicalProductions = false
+      this.errorTechnicalProductions = null
+    },
     reset() {
       this.currentResumoId = null
       this.periodFilter = {}
@@ -372,6 +499,8 @@ export const useDashboardStore = defineStore('dashboard', {
       this.clearOrientationDetails()
       this.clearBancaDetails()
       this.clearEventWorkDetails()
+      this.clearProjectDetails()
+      this.clearTechnicalProductionDetails()
       this.errorResumo = null
       this.errorSerie = null
       this.errorRanking = null

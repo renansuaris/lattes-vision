@@ -698,6 +698,24 @@ a {
   min-width: 180px;
 }
 
+.article-table td.project-type-cell {
+  min-width: 120px;
+}
+
+.article-table td.project-description-cell {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.article-table td.technical-category-cell {
+  min-width: 150px;
+}
+
+.article-table td.technical-text-cell {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .article-pagination {
   display: flex;
   align-items: center;
@@ -1445,4 +1463,30 @@ a {
   *:not(.loading-spinner)::after {
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Progresso real da consulta inicial de currículos. */
+.analysis-progress {
+  width: 100%;
+  height: 12px;
+  accent-color: var(--color-primary);
+}
+
+.loading-modal p {
+  margin: 0;
+}
+
+.loading-modal .analysis-count {
+  margin-bottom: var(--space-3);
+  font-weight: 600;
+}
+
+.analysis-current-id,
+.analysis-hint {
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.loading-modal .analysis-hint {
+  margin-top: var(--space-3);
 }

@@ -8,6 +8,10 @@ import type {
   BancaPage,
   EventWorkFilters,
   EventWorkPage,
+  ProjectFilters,
+  ProjectPage,
+  TechnicalProductionFilters,
+  TechnicalProductionPage,
   OrientationFilters,
   OrientationPage,
   PeriodFilter,
@@ -142,6 +146,38 @@ export async function fetchResumoQualisGrupoAdhoc(idsLattes: string[], period: P
     const response = await api.post<ResumoQualis>('/dashboard/grupo-adhoc/qualis', {
       idsLattes,
     }, { params: period })
+    return response.data
+  } catch (error) {
+    throw new Error(extractApiError(error))
+  }
+}
+
+export async function fetchProjects(
+  idLattes: string,
+  filters: ProjectFilters,
+  page = 0,
+  size = 20,
+): Promise<ProjectPage> {
+  try {
+    const response = await api.get<ProjectPage>(`/dashboard/pesquisadores/${idLattes}/projetos`, {
+      params: { ...filters, page, size },
+    })
+    return response.data
+  } catch (error) {
+    throw new Error(extractApiError(error))
+  }
+}
+
+export async function fetchTechnicalProductions(
+  idLattes: string,
+  filters: TechnicalProductionFilters,
+  page = 0,
+  size = 20,
+): Promise<TechnicalProductionPage> {
+  try {
+    const response = await api.get<TechnicalProductionPage>(`/dashboard/pesquisadores/${idLattes}/producoes-tecnicas`, {
+      params: { ...filters, page, size },
+    })
     return response.data
   } catch (error) {
     throw new Error(extractApiError(error))

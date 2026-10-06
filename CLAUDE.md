@@ -1498,3 +1498,54 @@ Campos minimos sugeridos para MVP:
 - Frontend: painel bibliografico, `PesquisadorView`, store, service e tipos do dashboard; o modal de auditoria foi reutilizado.
 - `npm run build` e `mvn -q -DskipTests package` passaram.
 - A aplicacao iniciou temporariamente na porta 8081 com PostgreSQL local e validou a nova consulta JPA. O teste unitario de servico foi adicionado, mas depende de JDK 17 neste ambiente por causa do Mockito/ByteBuddy no Java 25.
+
+## Drill-down de Projetos — Implementado (2026-09-29)
+
+### Uso e contrato
+- No dashboard individual, o card `Projetos` abre os projetos do periodo ativo; clicar na barra anual abre os projetos iniciados naquele ano.
+- O modal existente apresenta `Ano de inicio`, `Tipo` e `Titulo / descricao`, com paginacao, carregamento, erro e estado vazio. O texto completo e suas quebras de linha sao preservados.
+- Novo endpoint: `GET /api/dashboard/pesquisadores/{id}/projetos`, com `ano`, `anoInicial`, `anoFinal`, `page` e `size` opcionais. Pagina inicial 0, tamanho padrao 20 e maximo 100.
+- A consulta aplica o ano clicado em conjunto com o periodo inclusivo existente. Sem filtro temporal, inclui itens sem ano; com filtro, exclui-os. A ordenacao usa ano decrescente, titulo e ID, com nulos ao final.
+- O ano persistido representa o inicio do projeto. Situacao e ano final nao sao campos estruturados no modelo atual; o titulo pode conter tambem descricao e outros detalhes coletados.
+- O endpoint consulta somente dados persistidos, retorna 404 para pesquisador ausente e nao executa scraping. Nao houve alteracao de entidade, parser, banco ou necessidade de resincronizacao.
+- O estado de projetos e limpo ao fechar o modal ou trocar pesquisador/periodo; respostas antigas sao ignoradas apos essa limpeza.
+
+### Componentes e validacao
+- Backend: `ProjetoRepository`, `ProjectDetailDTO`, `ProjectPageDTO`, `DashboardService` e `DashboardController`, com documentacao OpenAPI.
+- Frontend: tipos, service, store, `PesquisadorView` e classes opcionais por coluna no modal compartilhado, aplicadas somente aos projetos.
+- `npm run build` passou; permanece o aviso conhecido de tamanho do bundle.
+- Suite completa: 72 testes passaram com JDK 17, incluindo 11 casos de controller e 5 de integracao de projetos com PostgreSQL 16 descartavel. Foram conferidos limites inclusivos/isolados, itens sem ano, isolamento entre pesquisadores, desempate/paginacao, texto completo, ausencia de scraping e igualdade dos totais com card/serie.
+- O teste `ProjectDrilldownIntegrationTest` roda somente quando `PROJECT_TEST_DATABASE_URL` aponta para um PostgreSQL descartavel dedicado (usuario/senha `admin`). Ele usa `create-drop`: nunca apontar para o banco de desenvolvimento. Sem essa variavel, esses cinco testes sao ignorados.
+- Comando usado em `backend/`: `JAVA_HOME=/home/renan/.jdks/ms-17.0.20.1 PROJECT_TEST_DATABASE_URL=jdbc:postgresql://127.0.0.1:55439/project_drilldown_test mvn -q test`. O sandbox bloqueou a anexacao do agente Mockito mesmo com Java 17; a execucao fora do sandbox passou.
+- Chromium com API simulada: validados card, clique real na barra, filtros e paginacao, descricao multilinha, erro/vazio, limpeza do periodo e abertura do modal de bancas existente.
+- `git diff --check` passou. As alteracoes locais preexistentes de testes e materiais do TCC foram preservadas.
+
+## Drill-down de Producoes Tecnicas — Implementado (2026-09-29)
+
+### Uso e contrato
+- No dashboard individual, o card `Prod. tecnicas` abre os registros do periodo ativo; clicar na barra anual abre as producoes daquele ano, mantendo o periodo global.
+- O modal existente mostra ano, categoria com rotulo legivel, titulo, autores e natureza. Se o titulo estiver ausente ou em branco, usa a descricao bruta; campos ausentes aparecem como traco. Textos longos e quebras de linha sao preservados.
+- Endpoint: `GET /api/dashboard/pesquisadores/{id}/producoes-tecnicas`, com `ano`, `anoInicial`, `anoFinal`, `page` e `size` opcionais. Pagina baseada em zero, tamanho padrao 20 e maximo 100; ordenacao por ano decrescente, titulo e ID, com nulos ao final.
+- O DTO preserva `id`, `year`, `category`, `title`, `authors`, `nature` e `rawDescription`. As seis categorias sao as mesmas de `CategoriaProducaoTecnica`.
+- Ano e periodo sao aplicados em conjunto, com limites inclusivos. Registros sem ano entram apenas no historico sem filtro temporal. A leitura nao dispara scraping e pesquisador ausente retorna 404.
+- O store preserva o recorte na paginacao e limpa o estado ao fechar ou trocar pesquisador/periodo, ignorando respostas antigas.
+- Escopo restrito ao detalhe individual: sem alteracao de parser, entidade, exportacao, classificacao ou necessidade de resincronizacao.
+
+### Componentes e validacao
+- Backend: `ProducaoTecnicaRepository`, `TechnicalProductionDetailDTO`, `TechnicalProductionPageDTO`, service e controller do dashboard, com OpenAPI.
+- Frontend: tipos, service, store e `PesquisadorView`, reutilizando o modal e suas classes opcionais por coluna.
+- Suite completa com JDK 17: 88 testes passaram, incluindo 11 novos casos de controller e 5 de integracao de producoes tecnicas. Foram verificados filtros, paginacao, categorias, campos nulos, isolamento por pesquisador, totais iguais ao card/serie e ausencia de scraping.
+- A integracao reutiliza `PROJECT_TEST_DATABASE_URL`, como Projetos. Foi executada em PostgreSQL 16 descartavel com usuario/senha `admin`: `JAVA_HOME=/home/renan/.jdks/ms-17.0.20.1 PROJECT_TEST_DATABASE_URL=jdbc:postgresql://127.0.0.1:55439/drilldown_test mvn -q test`. Os testes usam `create-drop`; a URL deve apontar exclusivamente para banco descartavel dedicado. Sem a variavel, os testes de integracao sao ignorados.
+- `npm run build` passou, com o aviso conhecido de tamanho do bundle. Chromium com API simulada validou card, clique real na barra, recorte, paginacao, categoria legivel, descricao alternativa, campos ausentes, erro/vazio, teclado e fechamento em viewport mobile.
+- A verificacao de navegador de Projetos/Bancas tambem passou. `git diff --check` passou; mudancas locais anteriores foram preservadas.
+
+
+## Progresso da consulta inicial — Implementado (2026-10-01)
+
+- A Home consulta os IDs únicos sequencialmente pelo endpoint individual existente. A store mantém total, concluídos, ID atual e etapa; o contador avança somente após resposta bem-sucedida.
+- Modal apresenta barra nativa de progresso, contador, ID atual, aviso sobre demora na coleta e etapa `Preparando indicadores`. Possui nome acessível, anúncio de progresso, foco no modal e formulário inerte durante a consulta.
+- Para grupos, o resumo consolidado é solicitado somente após todos os currículos concluírem. Para um único ID, a resposta individual é reutilizada diretamente.
+- Na primeira falha, nenhum ID seguinte é enviado e nenhum dashboard parcial é aberto. A mensagem identifica o ID e a quantidade concluída; os IDs permanecem preenchidos e o botão oferece `Tentar novamente`.
+- Currículos já persistidos são reaproveitados pelo backend na nova tentativa. A persistência existente usa um único `repository.save` com cascade para as produções; não foi alterado o backend.
+- Ao desmontar a Home, respostas pendentes são ignoradas e a sequência deixa de enviar novas consultas. Isso não cancela uma requisição já em execução no servidor; a mesma limitação se aplica a timeout/perda de conexão.
+- Validação: `npm run build` passou (aviso preexistente de bundle grande); `npm run test:analysis` cobre cinco cenários com transporte HTTP simulado: sequência/progresso, falha e nova tentativa, individual/deduplicação, falha na consolidação e saída da tela. O Vite precisou de execução fora do sandbox para sua porta interna. Não houve consulta real ao Lattes nesta validação.

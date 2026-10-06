@@ -7,6 +7,10 @@ import com.lattesvision.backend.dto.BancaDetailDTO;
 import com.lattesvision.backend.dto.BancaPageDTO;
 import com.lattesvision.backend.dto.EventWorkDetailDTO;
 import com.lattesvision.backend.dto.EventWorkPageDTO;
+import com.lattesvision.backend.dto.ProjectDetailDTO;
+import com.lattesvision.backend.dto.ProjectPageDTO;
+import com.lattesvision.backend.dto.TechnicalProductionDetailDTO;
+import com.lattesvision.backend.dto.TechnicalProductionPageDTO;
 import com.lattesvision.backend.dto.OrientationDetailDTO;
 import com.lattesvision.backend.dto.OrientationPageDTO;
 import com.lattesvision.backend.dto.ResumoPesquisadorDTO;
@@ -26,6 +30,8 @@ import com.lattesvision.backend.repository.BancaRepository;
 import com.lattesvision.backend.repository.PesquisadorRepository;
 import com.lattesvision.backend.repository.OrientacaoRepository;
 import com.lattesvision.backend.repository.TrabalhoEventoRepository;
+import com.lattesvision.backend.repository.ProjetoRepository;
+import com.lattesvision.backend.repository.ProducaoTecnicaRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -56,6 +62,8 @@ public class DashboardService {
     private final BancaRepository bancaRepository;
     private final OrientacaoRepository orientacaoRepository;
     private final TrabalhoEventoRepository trabalhoEventoRepository;
+    private final ProjetoRepository projetoRepository;
+    private final ProducaoTecnicaRepository producaoTecnicaRepository;
     private final ScraperService scraperService;
 
     public DashboardService(
@@ -64,6 +72,8 @@ public class DashboardService {
             BancaRepository bancaRepository,
             OrientacaoRepository orientacaoRepository,
             TrabalhoEventoRepository trabalhoEventoRepository,
+            ProjetoRepository projetoRepository,
+            ProducaoTecnicaRepository producaoTecnicaRepository,
             ScraperService scraperService
     ) {
         this.pesquisadorRepository = pesquisadorRepository;
@@ -71,6 +81,8 @@ public class DashboardService {
         this.bancaRepository = bancaRepository;
         this.orientacaoRepository = orientacaoRepository;
         this.trabalhoEventoRepository = trabalhoEventoRepository;
+        this.projetoRepository = projetoRepository;
+        this.producaoTecnicaRepository = producaoTecnicaRepository;
         this.scraperService = scraperService;
     }
 
@@ -433,6 +445,49 @@ public class DashboardService {
                 resultado.getTotalElements(),
                 resultado.getTotalPages()
         );
+    }
+
+    public ProjectPageDTO buscarProjetos(String idLattes, Integer ano, YearRange yearRange, int page, int size) {
+        buscarPorId(idLattes);
+
+        Sort sort = Sort.by(
+                Sort.Order.desc("ano").nullsLast(),
+                Sort.Order.asc("titulo").nullsLast(),
+                Sort.Order.asc("id")
+        );
+        Page<Projeto> resultado = projetoRepository.findForDashboard(
+                idLattes, ano, yearRange.startYear(), yearRange.endYear(), PageRequest.of(page, size, sort)
+        );
+        List<ProjectDetailDTO> items = resultado.getContent().stream()
+                .map(projeto -> new ProjectDetailDTO(
+                        projeto.getId(), projeto.getAno(), projeto.getTipo(), projeto.getTitulo()
+                ))
+                .toList();
+        return new ProjectPageDTO(items, resultado.getNumber(), resultado.getSize(),
+                resultado.getTotalElements(), resultado.getTotalPages());
+    }
+
+    public TechnicalProductionPageDTO buscarProducoesTecnicas(
+            String idLattes, Integer ano, YearRange yearRange, int page, int size
+    ) {
+        buscarPorId(idLattes);
+
+        Sort sort = Sort.by(
+                Sort.Order.desc("ano").nullsLast(),
+                Sort.Order.asc("titulo").nullsLast(),
+                Sort.Order.asc("id")
+        );
+        Page<ProducaoTecnica> resultado = producaoTecnicaRepository.findForDashboard(
+                idLattes, ano, yearRange.startYear(), yearRange.endYear(), PageRequest.of(page, size, sort)
+        );
+        List<TechnicalProductionDetailDTO> items = resultado.getContent().stream()
+                .map(producao -> new TechnicalProductionDetailDTO(
+                        producao.getId(), producao.getAno(), producao.getCategoria(), producao.getTitulo(),
+                        producao.getAutoresTexto(), producao.getNatureza(), producao.getDescricaoBruta()
+                ))
+                .toList();
+        return new TechnicalProductionPageDTO(items, resultado.getNumber(), resultado.getSize(),
+                resultado.getTotalElements(), resultado.getTotalPages());
     }
 
     public List<CategoriaQuantidadeDTO> buscarBancasPorTipo(String idLattes, YearRange yearRange) {

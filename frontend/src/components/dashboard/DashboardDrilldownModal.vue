@@ -33,7 +33,7 @@
               </thead>
               <tbody>
                 <tr v-for="row in rows" :key="row.id">
-                  <td v-for="column in columns" :key="column.key">{{ row.cells[column.key] ?? '—' }}</td>
+                  <td v-for="column in columns" :key="column.key" :class="column.cellClass">{{ row.cells[column.key] ?? '—' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -71,6 +71,7 @@
 export interface DrilldownColumn {
   key: string
   label: string
+  cellClass?: string
 }
 
 export interface DrilldownRow {

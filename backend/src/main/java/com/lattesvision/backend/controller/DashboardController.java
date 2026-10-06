@@ -4,6 +4,8 @@ import com.lattesvision.backend.dto.ApiErrorResponse;
 import com.lattesvision.backend.dto.ArticlePageDTO;
 import com.lattesvision.backend.dto.BancaPageDTO;
 import com.lattesvision.backend.dto.EventWorkPageDTO;
+import com.lattesvision.backend.dto.ProjectPageDTO;
+import com.lattesvision.backend.dto.TechnicalProductionPageDTO;
 import com.lattesvision.backend.dto.OrientationPageDTO;
 import com.lattesvision.backend.dto.CategoriaQuantidadeDTO;
 import com.lattesvision.backend.dto.GrupoAdhocRequestDTO;
@@ -589,6 +591,70 @@ public class DashboardController {
     ) {
         validarIdLattes(id);
         return ResponseEntity.ok(dashboardService.buscarResumoQualis(id, criarRecorteAnual(anoInicial, anoFinal)));
+    }
+
+    @Operation(
+            summary = "Projetos paginados para auditoria do dashboard",
+            description = "Consulta projetos persistidos pelo ano de inicio, com periodo inclusivo. Nao executa scraping."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Pagina de projetos encontrada",
+                    content = @Content(schema = @Schema(implementation = ProjectPageDTO.class))),
+            @ApiResponse(responseCode = "400", description = "ID, ano, periodo ou paginacao invalidos",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Pesquisador nao encontrado localmente",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    @GetMapping("/pesquisadores/{id}/projetos")
+    public ResponseEntity<ProjectPageDTO> buscarProjetos(
+            @Parameter(description = "ID Lattes de 16 digitos") @PathVariable String id,
+            @Parameter(description = "Ano de inicio do projeto") @RequestParam(required = false) Integer ano,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal,
+            @Parameter(description = "Pagina baseada em zero") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Quantidade de itens por pagina, entre 1 e 100")
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        validarIdLattes(id);
+        validarPaginacao(page, size);
+        if (ano != null && (ano < 1000 || ano > 9999)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O ano de inicio do projeto deve ter quatro digitos.");
+        }
+        return ResponseEntity.ok(dashboardService.buscarProjetos(
+                id, ano, criarRecorteAnual(anoInicial, anoFinal), page, size
+        ));
+    }
+
+    @Operation(
+            summary = "Producoes tecnicas paginadas para auditoria do dashboard",
+            description = "Consulta producoes tecnicas persistidas por ano e periodo inclusivo. Nao executa scraping."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Pagina de producoes tecnicas encontrada",
+                    content = @Content(schema = @Schema(implementation = TechnicalProductionPageDTO.class))),
+            @ApiResponse(responseCode = "400", description = "ID, ano, periodo ou paginacao invalidos",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Pesquisador nao encontrado localmente",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    })
+    @GetMapping("/pesquisadores/{id}/producoes-tecnicas")
+    public ResponseEntity<TechnicalProductionPageDTO> buscarProducoesTecnicas(
+            @Parameter(description = "ID Lattes de 16 digitos") @PathVariable String id,
+            @Parameter(description = "Ano da producao tecnica") @RequestParam(required = false) Integer ano,
+            @RequestParam(required = false) Integer anoInicial,
+            @RequestParam(required = false) Integer anoFinal,
+            @Parameter(description = "Pagina baseada em zero") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Quantidade de itens por pagina, entre 1 e 100")
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        validarIdLattes(id);
+        validarPaginacao(page, size);
+        if (ano != null && (ano < 1000 || ano > 9999)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O ano da producao tecnica deve ter quatro digitos.");
+        }
+        return ResponseEntity.ok(dashboardService.buscarProducoesTecnicas(
+                id, ano, criarRecorteAnual(anoInicial, anoFinal), page, size
+        ));
     }
 
     private void validarIdLattes(String id) {

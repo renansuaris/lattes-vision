@@ -7,7 +7,7 @@
       </div>
 
       <div class="simple-panel">
-        <form class="simple-form" @submit.prevent="analyzeCurriculum">
+        <form class="simple-form" :inert="isAnalyzing" @submit.prevent="analyzeCurriculum">
           <div class="field-group">
             <div class="field-label-row">
               <label class="field-label" for="idLattes">ID(s) Lattes</label>
@@ -76,32 +76,43 @@
 
           <div class="action-row">
             <button class="button button-primary" :disabled="!isValidId || isAnalyzing" type="submit">
-              Analisar
+              {{ analysisError ? 'Tentar novamente' : 'Analisar' }}
             </button>
           </div>
 
-          <div v-if="analysisError" class="status-box error">
+          <div v-if="analysisError" class="status-box error" role="alert">
             {{ analysisError }}
           </div>
         </form>
       </div>
     </section>
 
-    <div v-if="isAnalyzing" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div v-if="isAnalyzing" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="analysisTitle" tabindex="-1" ref="analysisDialog">
       <section class="loading-modal">
         <div class="loading-spinner" aria-hidden="true"></div>
-        <h2>{{ modalTitle }}</h2>
+        <h2 id="analysisTitle">{{ modalTitle }}</h2>
+        <progress class="analysis-progress" :value="store.analysisProgress.completed" :max="store.analysisProgress.total" aria-label="Currículos concluídos"></progress>
+        <div role="status" aria-live="polite" aria-atomic="true">
+          <p class="analysis-count">{{ store.analysisProgress.completed }} de {{ store.analysisProgress.total }} currículos concluídos</p>
+          <template v-if="store.analysisProgress.stage === 'consulting'">
+            <p>Consultando o currículo {{ store.analysisProgress.completed + 1 }} de {{ store.analysisProgress.total }}</p>
+            <p class="analysis-current-id">ID: {{ store.analysisProgress.currentId }}</p>
+          </template>
+          <p v-else>Preparando indicadores…</p>
+        </div>
+        <p class="analysis-hint">A consulta pode demorar quando o currículo precisa ser obtido na Plataforma Lattes.</p>
       </section>
     </div>
   </main>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useDashboardStore } from '../stores/dashboard'
 
+const analysisDialog = ref<HTMLElement | null>(null)
 const router = useRouter()
 const store = useDashboardStore()
 const idsInput = ref('')
@@ -191,6 +202,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (isAnalyzing.value) store.cancelAnalysis()
   document.removeEventListener('click', closeIdsHelpWhenClickingOutside)
   document.removeEventListener('keydown', closeIdsHelpOnEscape)
 })
@@ -205,35 +217,27 @@ async function analyzeCurriculum() {
   analysisError.value = null
   isAnalyzing.value = true
 
+  const ids = [...selectedIds.value]
+  const previousFocus = document.activeElement as HTMLElement | null
   try {
-    if (selectedIds.value.length === 1) {
-      await store.loadResumo(selectedIds.value[0])
-
-      if (store.errorResumo) {
-        analysisError.value = store.errorResumo
-        return
-      }
-
-      await router.push({
-        name: 'pesquisador',
-        params: { id: selectedIds.value[0] },
-      })
-      return
-    }
-
-    await store.loadGrupoAdhoc(selectedIds.value)
-
-    if (store.errorResumo) {
+    const analysis = store.analyzeIds(ids)
+    await nextTick()
+    analysisDialog.value?.focus()
+    if (!await analysis) {
       analysisError.value = store.errorResumo
       return
     }
-
-    await router.push({
-      name: 'grupo-adhoc',
-      query: { ids: selectedIds.value.join(',') },
-    })
+    if (ids.length === 1) {
+      await router.push({ name: 'pesquisador', params: { id: ids[0] } })
+    } else {
+      await router.push({ name: 'grupo-adhoc', query: { ids: ids.join(',') } })
+    }
+  } catch (error) {
+    analysisError.value = error instanceof Error ? error.message : 'Não foi possível abrir o dashboard. Tente novamente.'
   } finally {
     isAnalyzing.value = false
+    await nextTick()
+    if (previousFocus?.isConnected) previousFocus.focus()
   }
 }
 </script>

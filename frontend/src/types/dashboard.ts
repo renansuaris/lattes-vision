@@ -157,6 +157,55 @@ export interface EventWorkPage {
   totalPages: number
 }
 
+export interface ProjectFilters extends PeriodFilter {
+  ano?: number
+}
+
+export interface ProjectDetail {
+  id: number | null
+  year: number | null
+  type: string | null
+  title: string | null
+}
+
+export interface ProjectPage {
+  items: ProjectDetail[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+export type TechnicalProductionCategory =
+  | 'SOFTWARE_COM_REGISTRO'
+  | 'SOFTWARE_SEM_REGISTRO'
+  | 'PRODUTO_TECNOLOGICO'
+  | 'PROCESSO_OU_TECNICA'
+  | 'TRABALHO_TECNICO'
+  | 'OUTRA'
+
+export interface TechnicalProductionFilters extends PeriodFilter {
+  ano?: number
+}
+
+export interface TechnicalProductionDetail {
+  id: number | null
+  year: number | null
+  category: TechnicalProductionCategory | null
+  title: string | null
+  authors: string | null
+  nature: string | null
+  rawDescription: string | null
+}
+
+export interface TechnicalProductionPage {
+  items: TechnicalProductionDetail[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
 export interface CoberturaQualis {
   totalArtigos: number
   classificados: number
