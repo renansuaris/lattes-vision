@@ -7,6 +7,12 @@ import com.lattesvision.backend.dto.BancaDetailDTO;
 import com.lattesvision.backend.dto.BancaPageDTO;
 import com.lattesvision.backend.dto.EventWorkDetailDTO;
 import com.lattesvision.backend.dto.EventWorkPageDTO;
+import com.lattesvision.backend.dto.BookChapterDetailDTO;
+import com.lattesvision.backend.dto.BookChapterPageDTO;
+import com.lattesvision.backend.repository.CapituloLivroRepository;
+import com.lattesvision.backend.dto.BookDetailDTO;
+import com.lattesvision.backend.dto.BookPageDTO;
+import com.lattesvision.backend.repository.LivroRepository;
 import com.lattesvision.backend.dto.ProjectDetailDTO;
 import com.lattesvision.backend.dto.ProjectPageDTO;
 import com.lattesvision.backend.dto.TechnicalProductionDetailDTO;
@@ -64,6 +70,8 @@ public class DashboardService {
     private final TrabalhoEventoRepository trabalhoEventoRepository;
     private final ProjetoRepository projetoRepository;
     private final ProducaoTecnicaRepository producaoTecnicaRepository;
+    private final LivroRepository bookRepository;
+    private final CapituloLivroRepository bookChapterRepository;
     private final ScraperService scraperService;
 
     public DashboardService(
@@ -74,8 +82,12 @@ public class DashboardService {
             TrabalhoEventoRepository trabalhoEventoRepository,
             ProjetoRepository projetoRepository,
             ProducaoTecnicaRepository producaoTecnicaRepository,
+            LivroRepository bookRepository,
+            CapituloLivroRepository bookChapterRepository,
             ScraperService scraperService
     ) {
+        this.bookRepository = bookRepository;
+        this.bookChapterRepository = bookChapterRepository;
         this.pesquisadorRepository = pesquisadorRepository;
         this.artigoRepository = artigoRepository;
         this.bancaRepository = bancaRepository;
@@ -445,6 +457,28 @@ public class DashboardService {
                 resultado.getTotalElements(),
                 resultado.getTotalPages()
         );
+    }
+
+    public BookPageDTO buscarLivros(String idLattes, Integer ano, YearRange yearRange, int page, int size) {
+        buscarPorId(idLattes);
+        Sort sort = Sort.by(Sort.Order.desc("ano").nullsLast(),
+                Sort.Order.asc("titulo").nullsLast(), Sort.Order.asc("id"));
+        Page<Livro> result = bookRepository.findForDashboard(
+                idLattes, ano, yearRange.startYear(), yearRange.endYear(), PageRequest.of(page, size, sort));
+        List<BookDetailDTO> items = result.getContent().stream()
+                .map(item -> new BookDetailDTO(item.getId(), item.getAno(), item.getTitulo(), item.getAutores(), item.getEditora(), item.getIsbn(), item.getEdicao(), item.getVolume(), item.getPaginas(), item.getDescricaoBruta())).toList();
+        return new BookPageDTO(items, result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
+    }
+
+    public BookChapterPageDTO buscarCapitulos(String idLattes, Integer ano, YearRange yearRange, int page, int size) {
+        buscarPorId(idLattes);
+        Sort sort = Sort.by(Sort.Order.desc("ano").nullsLast(),
+                Sort.Order.asc("titulo").nullsLast(), Sort.Order.asc("id"));
+        Page<CapituloLivro> result = bookChapterRepository.findForDashboard(
+                idLattes, ano, yearRange.startYear(), yearRange.endYear(), PageRequest.of(page, size, sort));
+        List<BookChapterDetailDTO> items = result.getContent().stream()
+                .map(item -> new BookChapterDetailDTO(item.getId(), item.getAno(), item.getTitulo(), item.getAutores(), item.getEditora(), item.getIsbn(), item.getEdicao(), item.getVolume(), item.getPaginas(), item.getDescricaoBruta(), item.getTituloLivro(), item.getOrganizadores())).toList();
+        return new BookChapterPageDTO(items, result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
     public ProjectPageDTO buscarProjetos(String idLattes, Integer ano, YearRange yearRange, int page, int size) {

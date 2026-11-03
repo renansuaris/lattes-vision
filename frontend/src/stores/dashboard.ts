@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 
 import {
   fetchArticles,
+  fetchBooks,
   fetchBancas,
   fetchEventWorks,
   fetchProjects,
@@ -18,6 +19,8 @@ import {
   loadResumoPesquisador,
 } from '../services/dashboard.service'
 import type {
+  BookFilters,
+  BookPage,
   ArticleFilters,
   ArticlePage,
   BancaFilters,
@@ -72,6 +75,11 @@ interface DashboardState {
   projectFilters: ProjectFilters
   loadingProjects: boolean
   errorProjects: string | null
+  bookPage: BookPage | null
+  bookFilters: BookFilters
+  loadingBooks: boolean
+  errorBooks: string | null
+  bookRequestId: number
   projectRequestId: number
   technicalProductionPage: TechnicalProductionPage | null
   technicalProductionFilters: TechnicalProductionFilters
@@ -125,6 +133,11 @@ export const useDashboardStore = defineStore('dashboard', {
     projectFilters: {},
     loadingProjects: false,
     errorProjects: null,
+    bookPage: null,
+    bookFilters: {},
+    loadingBooks: false,
+    errorBooks: null,
+    bookRequestId: 0,
     projectRequestId: 0,
     technicalProductionPage: null,
     technicalProductionFilters: {},
@@ -209,6 +222,7 @@ export const useDashboardStore = defineStore('dashboard', {
       this.clearBancaDetails()
       this.clearEventWorkDetails()
       this.clearProjectDetails()
+      this.clearBookDetails()
       this.clearTechnicalProductionDetails()
 
       try {
@@ -428,6 +442,32 @@ export const useDashboardStore = defineStore('dashboard', {
       this.loadingEventWorks = false
       this.errorEventWorks = null
     },
+    async loadBookDetails(idLattes: string, category: 'books' | 'bookChapters', filters: BookFilters = {}, page = 0) {
+      const requestId = ++this.bookRequestId
+      this.loadingBooks = true
+      this.errorBooks = null
+      this.bookFilters = { ...filters, ...this.periodFilter }
+
+      try {
+        const result = await fetchBooks(idLattes, category, this.bookFilters, page)
+        if (requestId === this.bookRequestId) this.bookPage = result
+      } catch (error) {
+        if (requestId === this.bookRequestId) {
+          this.bookPage = null
+          this.errorBooks = error instanceof Error ? error.message : 'Falha ao carregar livros e capítulos.'
+        }
+      } finally {
+        if (requestId === this.bookRequestId) this.loadingBooks = false
+      }
+    },
+    clearBookDetails() {
+      // Impede que uma resposta antiga restaure dados apos fechar ou trocar o recorte.
+      this.bookRequestId++
+      this.bookPage = null
+      this.bookFilters = {}
+      this.loadingBooks = false
+      this.errorBooks = null
+    },
     async loadProjectDetails(idLattes: string, filters: ProjectFilters = {}, page = 0) {
       const requestId = ++this.projectRequestId
       this.loadingProjects = true
@@ -500,6 +540,7 @@ export const useDashboardStore = defineStore('dashboard', {
       this.clearBancaDetails()
       this.clearEventWorkDetails()
       this.clearProjectDetails()
+      this.clearBookDetails()
       this.clearTechnicalProductionDetails()
       this.errorResumo = null
       this.errorSerie = null

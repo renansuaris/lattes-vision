@@ -1,12 +1,10 @@
 package com.lattesvision.backend.dto;
 
 import com.lattesvision.backend.model.EstratoQualis;
-import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.EnumMap;
 import java.util.Map;
 
-@Schema(description = "Distribuicao anual de artigos por estrato Qualis")
 public class SerieQualisAnoDTO {
 
     private Integer ano;

@@ -92,15 +92,10 @@
         <div class="loading-spinner" aria-hidden="true"></div>
         <h2 id="analysisTitle">{{ modalTitle }}</h2>
         <progress class="analysis-progress" :value="store.analysisProgress.completed" :max="store.analysisProgress.total" aria-label="Currículos concluídos"></progress>
-        <div role="status" aria-live="polite" aria-atomic="true">
-          <p class="analysis-count">{{ store.analysisProgress.completed }} de {{ store.analysisProgress.total }} currículos concluídos</p>
-          <template v-if="store.analysisProgress.stage === 'consulting'">
-            <p>Consultando o currículo {{ store.analysisProgress.completed + 1 }} de {{ store.analysisProgress.total }}</p>
-            <p class="analysis-current-id">ID: {{ store.analysisProgress.currentId }}</p>
-          </template>
-          <p v-else>Preparando indicadores…</p>
+        <div class="analysis-status" role="status" aria-live="polite" aria-atomic="true">
+          <p class="analysis-count">{{ store.analysisProgress.completed }} de {{ store.analysisProgress.total }} {{ store.analysisProgress.total === 1 ? 'currículo concluído' : 'currículos concluídos' }}</p>
+          <p v-if="store.analysisProgress.stage === 'preparing'">Preparando indicadores…</p>
         </div>
-        <p class="analysis-hint">A consulta pode demorar quando o currículo precisa ser obtido na Plataforma Lattes.</p>
       </section>
     </div>
   </main>

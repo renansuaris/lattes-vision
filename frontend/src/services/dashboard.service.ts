@@ -1,3 +1,4 @@
+import type { BookFilters, BookPage } from '../types/dashboard'
 import { AxiosError } from 'axios'
 
 import { api } from './api'
@@ -310,6 +311,18 @@ export async function fetchEventWorks(
         page,
         size,
       },
+    })
+    return response.data
+  } catch (error) {
+    throw new Error(extractApiError(error))
+  }
+}
+
+export async function fetchBooks(idLattes: string, category: 'books' | 'bookChapters', filters: BookFilters, page = 0, size = 20): Promise<BookPage> {
+  try {
+    const endpoint = category === 'books' ? 'livros' : 'capitulos'
+    const response = await api.get<BookPage>(`/dashboard/pesquisadores/${idLattes}/${endpoint}`, {
+      params: { ...filters, page, size },
     })
     return response.data
   } catch (error) {

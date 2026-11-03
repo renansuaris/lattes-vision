@@ -3,7 +3,7 @@
     <div class="filter-panel__title">
       <div>
         <h2>Período de análise</h2>
-        <span>{{ activePeriodLabel }}</span>
+        <span v-if="activePeriodLabel">{{ activePeriodLabel }}</span>
       </div>
       <button v-if="hasActivePeriod" class="button button-secondary" type="button" @click="clear">
         Limpar
@@ -23,9 +23,6 @@
     </div>
 
     <p v-if="error" class="filter-panel__error" role="alert">{{ error }}</p>
-    <p class="filter-panel__note">
-      O período altera apenas a análise e a exportação; a sincronização preserva todo o histórico do currículo.
-    </p>
   </form>
 </template>
 
@@ -58,7 +55,7 @@ const activePeriodLabel = computed(() => {
   if (props.period.anoFinal != null) {
     return `Exibindo dados até ${props.period.anoFinal}.`
   }
-  return 'Exibindo todo o histórico disponível.'
+  return ''
 })
 
 watch(

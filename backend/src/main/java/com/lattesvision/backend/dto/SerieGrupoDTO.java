@@ -1,29 +1,19 @@
 package com.lattesvision.backend.dto;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-
-@Schema(description = "Serie anual agregada de um grupo de pesquisadores")
 public class SerieGrupoDTO {
 
-    @Schema(description = "Ano de referencia", example = "2024")
     private Integer ano;
 
-    @Schema(description = "Total de artigos no ano", example = "10")
     private long artigos;
 
-    @Schema(description = "Total de trabalhos em eventos no ano", example = "6")
     private long trabalhosEventos;
 
-    @Schema(description = "Total de orientacoes no ano", example = "4")
     private long orientacoes;
 
-    @Schema(description = "Total de projetos no ano", example = "2")
     private long projetos;
 
-    @Schema(description = "Total de bancas no ano", example = "5")
     private long bancas;
 
-    @Schema(description = "Total de producoes tecnicas no ano", example = "3")
     private long producoesTecnicas;
 
     public SerieGrupoDTO() {

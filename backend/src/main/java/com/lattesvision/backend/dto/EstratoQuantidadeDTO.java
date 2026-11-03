@@ -1,9 +1,7 @@
 package com.lattesvision.backend.dto;
 
 import com.lattesvision.backend.model.EstratoQualis;
-import io.swagger.v3.oas.annotations.media.Schema;
 
-@Schema(description = "Quantidade de artigos classificados em um estrato Qualis")
 public class EstratoQuantidadeDTO {
 
     private EstratoQualis estrato;

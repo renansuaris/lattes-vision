@@ -1,14 +1,9 @@
 package com.lattesvision.backend.dto;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-
-@Schema(description = "Dados de uma serie temporal para graficos")
 public class SerieTemporalDTO {
 
-    @Schema(description = "Ano de referencia", example = "2023")
     private Integer ano;
 
-    @Schema(description = "Quantidade produzida no ano", example = "5")
     private long quantidade;
 
     public SerieTemporalDTO() {

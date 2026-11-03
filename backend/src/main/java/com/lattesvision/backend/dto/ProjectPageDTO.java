@@ -1,9 +1,7 @@
 package com.lattesvision.backend.dto;
 
-import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
-@Schema(description = "Pagina de projetos para auditoria no dashboard")
 public record ProjectPageDTO(
         List<ProjectDetailDTO> items,
         int page,

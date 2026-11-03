@@ -1549,3 +1549,22 @@ Campos minimos sugeridos para MVP:
 - Currículos já persistidos são reaproveitados pelo backend na nova tentativa. A persistência existente usa um único `repository.save` com cascade para as produções; não foi alterado o backend.
 - Ao desmontar a Home, respostas pendentes são ignoradas e a sequência deixa de enviar novas consultas. Isso não cancela uma requisição já em execução no servidor; a mesma limitação se aplica a timeout/perda de conexão.
 - Validação: `npm run build` passou (aviso preexistente de bundle grande); `npm run test:analysis` cobre cinco cenários com transporte HTTP simulado: sequência/progresso, falha e nova tentativa, individual/deduplicação, falha na consolidação e saída da tela. O Vite precisou de execução fora do sandbox para sua porta interna. Não houve consulta real ao Lattes nesta validação.
+
+## Detalhamento de livros e capítulos — Implementado (2026-10-07)
+
+- No painel de produção bibliográfica individual, Livros e Capítulos passam a abrir o modal paginado existente por clique, Enter ou Espaço. A visão de grupo mantém os subtotais sem interação.
+- Novos endpoints de leitura: `GET /api/dashboard/pesquisadores/{id}/livros` e `/capitulos`, com `ano`, `anoInicial`, `anoFinal`, `page` e `size`. Página inicial 0, tamanho padrão 20 e máximo 100; validação de ID, ano, período e paginação.
+- Consultas por pesquisador com período inclusivo, incluindo itens sem ano somente sem recorte temporal. Ordenação por ano decrescente, título e ID; sem scraping, alteração de entidade ou necessidade de resincronização.
+- Modal apresenta ano, título, autores, editora, ISBN, edição, volume e páginas; capítulos incluem o título do livro. Campos ausentes usam traço e títulos ausentes usam a descrição bruta.
+- Estado compartilhado de livros/capítulos descarta respostas antigas ao fechar, trocar categoria, pesquisador ou período.
+- Build frontend e testes da store passaram. Chromium com API simulada validou cliques, teclado, período, paginação, erro/vazio e fechamento mobile. Testes dedicados de integração usam exclusivamente PostgreSQL descartável apontado por `PROJECT_TEST_DATABASE_URL` (Hibernate `create-drop`), como os testes anteriores.
+- Foram removidas do filtro as frases sobre preservação do histórico na sincronização e “Exibindo todo o histórico disponível”, conforme solicitado.
+- Validação final: 113 testes backend passaram com JDK 17 e PostgreSQL 16 descartável, incluindo 22 casos de controller e 3 de integração novos. Os 7 testes frontend passaram; build final passou com o aviso conhecido de tamanho do bundle. Recursos temporários de validação encerrados.
+
+## Remoção do Swagger/OpenAPI — 2026-10-15
+
+- Por decisão do autor, removidas as anotações Swagger/OpenAPI dos dois controllers e dos DTOs, além da dependência `springdoc-openapi-starter-webmvc-ui` do Maven.
+- Rotas, parâmetros, validações, respostas e lógica de negócio foram preservados. A interface Swagger e os endpoints de documentação OpenAPI deixam de ser disponibilizados.
+- `DashboardController`: de 863 para 464 linhas; `PesquisadorController`: de 144 para 80 linhas.
+- Validação com JDK 17: compilação e suíte backend aprovadas, com 100 testes executados e 13 casos de integração ignorados por ausência de `PROJECT_TEST_DATABASE_URL` (113 casos no total). O Mockito exigiu execução fora do sandbox. `git diff --check` passou.
+- Os demais pontos de refatoração levantados ficam para discussão posterior.

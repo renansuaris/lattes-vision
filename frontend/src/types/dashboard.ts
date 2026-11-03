@@ -264,3 +264,26 @@ export interface ApiErrorResponse {
   message: string
   path: string
 }
+
+export interface BookFilters extends PeriodFilter { ano?: number }
+export interface BookDetail {
+  id: number
+  year: number | null
+  title: string | null
+  authors: string | null
+  publisher: string | null
+  isbn: string | null
+  edition: string | null
+  volume: string | null
+  pages: string | null
+  rawDescription: string | null
+  bookTitle?: string | null
+  organizers?: string | null
+}
+export interface BookPage {
+  items: BookDetail[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}

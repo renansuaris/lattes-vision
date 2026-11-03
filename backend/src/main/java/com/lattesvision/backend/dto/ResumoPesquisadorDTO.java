@@ -1,56 +1,38 @@
 package com.lattesvision.backend.dto;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-@Schema(description = "Resumo agregado de um pesquisador para exibicao em dashboard")
 public class ResumoPesquisadorDTO {
 
-    @Schema(description = "ID de 16 digitos do Curriculo Lattes", example = "7364915463901013")
     private String idLattes;
 
-    @Schema(description = "Nome completo do pesquisador", example = "Renan Alencar Soares")
     private String nomeCompleto;
 
-    @Schema(description = "Data da ultima atualizacao informada no Curriculo Lattes")
     private LocalDate dataUltimaAtualizacao;
 
-    @Schema(description = "Data e hora da ultima sincronizacao feita pelo LattesVision")
     private LocalDateTime dataSincronizacao;
 
-    @Schema(description = "Total de artigos persistidos para o pesquisador", example = "12")
     private long totalArtigos;
 
-    @Schema(description = "Total de orientacoes persistidas para o pesquisador", example = "8")
     private long totalOrientacoes;
 
-    @Schema(description = "Total de orientacoes concluidas", example = "5")
     private long totalOrientacoesConcluidas;
 
-    @Schema(description = "Total de orientacoes em andamento", example = "3")
     private long totalOrientacoesEmAndamento;
 
-    @Schema(description = "Total de projetos persistidos para o pesquisador", example = "4")
     private long totalProjetos;
 
-    @Schema(description = "Total de bancas persistidas para o pesquisador", example = "6")
     private long totalBancas;
 
-    @Schema(description = "Total de producoes tecnicas persistidas para o pesquisador", example = "2")
     private long totalProducoesTecnicas;
 
-    @Schema(description = "Total de trabalhos em eventos persistidos para o pesquisador", example = "15")
     private long totalTrabalhosEventos;
 
-    @Schema(description = "Total de livros publicados, organizados ou editados", example = "2")
     private long totalLivros;
 
-    @Schema(description = "Total de capitulos de livros publicados", example = "5")
     private long totalCapitulos;
 
-    @Schema(description = "Total de itens de producao bibliografica", example = "34")
     private long totalProducaoBibliografica;
 
     public String getIdLattes() {

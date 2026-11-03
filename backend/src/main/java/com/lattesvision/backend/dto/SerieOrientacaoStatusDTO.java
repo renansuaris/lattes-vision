@@ -1,17 +1,11 @@
 package com.lattesvision.backend.dto;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-
-@Schema(description = "Serie anual de orientacoes separada por status")
 public class SerieOrientacaoStatusDTO {
 
-    @Schema(description = "Ano de referencia", example = "2024")
     private Integer ano;
 
-    @Schema(description = "Quantidade de orientacoes concluidas no ano", example = "3")
     private long concluidas;
 
-    @Schema(description = "Quantidade de orientacoes em andamento no ano", example = "2")
     private long emAndamento;
 
     public SerieOrientacaoStatusDTO() {

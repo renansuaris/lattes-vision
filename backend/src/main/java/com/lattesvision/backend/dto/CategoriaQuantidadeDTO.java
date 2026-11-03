@@ -1,14 +1,9 @@
 package com.lattesvision.backend.dto;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-
-@Schema(description = "Quantidade agregada por categoria")
 public class CategoriaQuantidadeDTO {
 
-    @Schema(description = "Nome da categoria agregada", example = "Mestrado")
     private String categoria;
 
-    @Schema(description = "Quantidade de itens na categoria", example = "5")
     private long quantidade;
 
     public CategoriaQuantidadeDTO() {

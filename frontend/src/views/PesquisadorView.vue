@@ -53,6 +53,9 @@
         :trabalhos-eventos="currentResumo.totalTrabalhosEventos"
         :livros="currentResumo.totalLivros"
         :capitulos="currentResumo.totalCapitulos"
+        interactive-books
+        @open-books="openBookDetails('books')"
+        @open-book-chapters="openBookDetails('bookChapters')"
         interactive-event-works
         @open-event-works="openEventWorkDetails"
       />
@@ -94,7 +97,6 @@
               <div class="chart-card__header">
                 <div>
                   <h3>{{ card.label }}</h3>
-                  <p>{{ card.description }}</p>
                 </div>
               </div>
 
@@ -194,44 +196,37 @@ import type {
 const route = useRoute()
 const router = useRouter()
 const store = useDashboardStore()
-const activeDrilldown = ref<'articles' | 'orientations' | 'bancas' | 'eventWorks' | 'projects' | 'technicalProductions' | null>(null)
+const activeDrilldown = ref<'articles' | 'orientations' | 'bancas' | 'eventWorks' | 'projects' | 'technicalProductions' | 'books' | 'bookChapters' | null>(null)
 const exporting = ref(false)
 const exportError = ref<string | null>(null)
 
 const seriesOptions: Array<{
   value: TipoSerie
   label: string
-  description: string
 }> = [
   {
     value: 'artigos',
     label: 'Artigos publicados em periódicos',
-    description: 'Clique em um ano para auditar as publicações em periódicos.',
   },
   {
     value: 'trabalhos_eventos',
     label: 'Trabalhos em eventos',
-    description: 'Clique em um ano para auditar os trabalhos completos publicados em anais.',
   },
   {
     value: 'orientacoes',
     label: 'Orientações',
-    description: 'Orientações concluídas e em andamento por ano.',
   },
   {
     value: 'projetos',
     label: 'Projetos',
-    description: 'Clique em um ano para auditar os projetos iniciados naquele ano.',
   },
   {
     value: 'bancas',
     label: 'Participações em bancas',
-    description: 'Clique em uma fatia para auditar as participações por tipo.',
   },
   {
     value: 'producoes_tecnicas',
     label: 'Produções técnicas',
-    description: 'Clique em um ano para auditar os softwares, produtos e outras produções técnicas.',
   },
 ]
 
@@ -280,7 +275,6 @@ const seriesCards = computed(() => {
   return seriesOptions.map((option) => ({
     value: option.value,
     label: option.label,
-    description: option.description,
   }))
 })
 
@@ -319,7 +313,10 @@ const summaryCards = computed(() => {
   ]
 })
 
+const isBookDrilldown = computed(() => activeDrilldown.value === 'books' || activeDrilldown.value === 'bookChapters')
+
 const drilldownTitle = computed(() => {
+  if (isBookDrilldown.value) return activeDrilldown.value === 'books' ? 'Livros' : 'Capítulos de livros'
   if (activeDrilldown.value === 'technicalProductions') {
     const year = store.technicalProductionFilters.ano
     return year != null ? `Produções técnicas · ${year}` : 'Produções técnicas'
@@ -341,6 +338,17 @@ const drilldownTitle = computed(() => {
 })
 
 const drilldownColumns = computed<DrilldownColumn[]>(() => {
+  if (isBookDrilldown.value) return [
+    { key: 'year', label: 'Ano' },
+    { key: 'title', label: 'Título', cellClass: 'technical-text-cell' },
+    ...(activeDrilldown.value === 'bookChapters' ? [{ key: 'bookTitle', label: 'Livro', cellClass: 'technical-text-cell' }] : []),
+    { key: 'authors', label: 'Autores', cellClass: 'technical-text-cell' },
+    { key: 'publisher', label: 'Editora' },
+    { key: 'isbn', label: 'ISBN' },
+    { key: 'edition', label: 'Edição' },
+    { key: 'volume', label: 'Volume' },
+    { key: 'pages', label: 'Páginas' },
+  ]
   if (activeDrilldown.value === 'technicalProductions') {
     return [
       { key: 'year', label: 'Ano' },
@@ -394,6 +402,20 @@ const drilldownColumns = computed<DrilldownColumn[]>(() => {
 })
 
 const drilldownRows = computed<DrilldownRow[]>(() => {
+  if (isBookDrilldown.value) return (store.bookPage?.items ?? []).map((book, index) => ({
+    id: book.id ?? `book-${index}`,
+    cells: {
+      year: String(book.year ?? '—'),
+      title: book.title?.trim() || book.rawDescription?.trim() || '—',
+      bookTitle: book.bookTitle?.trim() || '—',
+      authors: book.authors?.trim() || '—',
+      publisher: book.publisher?.trim() || '—',
+      isbn: book.isbn?.trim() || '—',
+      edition: book.edition?.trim() || '—',
+      volume: book.volume?.trim() || '—',
+      pages: book.pages?.trim() || '—',
+    },
+  }))
   if (activeDrilldown.value === 'technicalProductions') {
     return (store.technicalProductionPage?.items ?? []).map((production, index) => ({
       id: production.id ?? `technical-production-${index}`,
@@ -468,6 +490,7 @@ const drilldownRows = computed<DrilldownRow[]>(() => {
 })
 
 const drilldownPage = computed(() => {
+  if (isBookDrilldown.value) return store.bookPage
   if (activeDrilldown.value === 'technicalProductions') return store.technicalProductionPage
   if (activeDrilldown.value === 'projects') return store.projectPage
   if (activeDrilldown.value === 'bancas') {
@@ -480,6 +503,7 @@ const drilldownPage = computed(() => {
 })
 
 const drilldownLoading = computed(() => {
+  if (isBookDrilldown.value) return store.loadingBooks
   if (activeDrilldown.value === 'technicalProductions') return store.loadingTechnicalProductions
   if (activeDrilldown.value === 'projects') return store.loadingProjects
   if (activeDrilldown.value === 'bancas') {
@@ -492,6 +516,7 @@ const drilldownLoading = computed(() => {
 })
 
 const drilldownError = computed(() => {
+  if (isBookDrilldown.value) return store.errorBooks
   if (activeDrilldown.value === 'technicalProductions') return store.errorTechnicalProductions
   if (activeDrilldown.value === 'projects') return store.errorProjects
   if (activeDrilldown.value === 'bancas') {
@@ -504,6 +529,7 @@ const drilldownError = computed(() => {
 })
 
 const drilldownLoadingMessage = computed(() => {
+  if (isBookDrilldown.value) return 'Carregando livros e capítulos...'
   if (activeDrilldown.value === 'technicalProductions') return 'Carregando produções técnicas...'
   if (activeDrilldown.value === 'projects') return 'Carregando projetos...'
   if (activeDrilldown.value === 'bancas') {
@@ -516,6 +542,7 @@ const drilldownLoadingMessage = computed(() => {
 })
 
 const drilldownEmptyMessage = computed(() => {
+  if (isBookDrilldown.value) return 'Nenhum registro foi encontrado para este recorte.'
   if (activeDrilldown.value === 'technicalProductions') return 'Nenhuma produção técnica foi encontrada para este recorte.'
   if (activeDrilldown.value === 'projects') return 'Nenhum projeto foi encontrado para este recorte.'
   if (activeDrilldown.value === 'bancas') {
@@ -529,14 +556,18 @@ const drilldownEmptyMessage = computed(() => {
     : 'Nenhum artigo foi encontrado para este recorte.'
 })
 
-const drilldownTotalLabel = computed(() => activeDrilldown.value === 'bancas'
+const drilldownTotalLabel = computed(() => activeDrilldown.value === 'books' ? 'livro'
+  : activeDrilldown.value === 'bookChapters' ? 'capítulo'
+  : activeDrilldown.value === 'bancas'
   ? 'participação em banca'
   : activeDrilldown.value === 'technicalProductions' ? 'produção técnica'
   : activeDrilldown.value === 'projects' ? 'projeto'
   : activeDrilldown.value === 'eventWorks' ? 'trabalho em evento'
   : activeDrilldown.value === 'orientations' ? 'orientação' : 'artigo')
 
-const drilldownTotalLabelPlural = computed(() => activeDrilldown.value === 'bancas'
+const drilldownTotalLabelPlural = computed(() => activeDrilldown.value === 'books' ? 'livros'
+  : activeDrilldown.value === 'bookChapters' ? 'capítulos'
+  : activeDrilldown.value === 'bancas'
   ? 'participações em bancas'
   : activeDrilldown.value === 'technicalProductions' ? 'produções técnicas'
   : activeDrilldown.value === 'projects' ? 'projetos'
@@ -601,6 +632,13 @@ async function openEventWorkDetails(filters: EventWorkFilters = {}) {
   await store.loadEventWorkDetails(currentId.value, filters)
 }
 
+async function openBookDetails(category: 'books' | 'bookChapters') {
+  if (!currentResumo.value) return
+  store.clearBookDetails()
+  activeDrilldown.value = category
+  await store.loadBookDetails(currentId.value, category)
+}
+
 async function openProjectDetails(filters: ProjectFilters = {}) {
   if (!currentResumo.value) return
 
@@ -640,10 +678,15 @@ function closeDrilldown() {
   store.clearBancaDetails()
   store.clearEventWorkDetails()
   store.clearProjectDetails()
+  store.clearBookDetails()
   store.clearTechnicalProductionDetails()
 }
 
 async function changeDrilldownPage(page: number) {
+  if (activeDrilldown.value === 'books' || activeDrilldown.value === 'bookChapters') {
+    await store.loadBookDetails(currentId.value, activeDrilldown.value, store.bookFilters, page)
+    return
+  }
   if (activeDrilldown.value === 'technicalProductions') {
     await store.loadTechnicalProductionDetails(currentId.value, store.technicalProductionFilters, page)
     return
